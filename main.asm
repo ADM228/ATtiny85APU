@@ -51,6 +51,8 @@ rjmp Cycle
 .equ	DO		= PB1
 .equ	DI		= PB0
 
+.equ	PWM_OUT	= PB4
+
 ; .org INT_VECTORS_SIZE	; Unnecessary
 Init:
 	cli
@@ -62,52 +64,62 @@ Init:
 	out	SPL,	r16 ; Init LSB stack pointer
 	ldi	r20,	(1<<PB3)
 	; Set timer 0 freq to max for SPI + SPI settings
-	clr r16
 	clr r31
 	clr r19
 	clr r0
 	clr r1
+	clr r16
 	out TCCR0B,	r16	; (0<<FOC0A)|(0<<FOC0B)|\	; No force strobe
-					; (0<<WGM02)|\				; Total wavegen mode = 010 (CTC)
+					; (0<<WGM02)|\				; Total wavegen mode = 000 (normal)
 					; (0<<CS00)					; No clock source
 	out USISR,	r16	; (0<<USISIF)|(0<<USIOIF)|\	; No interrupts
 					; (0<<USIPF)|\				; No stop condition
 					; (0<<USICNT0)				; Counter at 0
+	out TCCR0A,	r16	; (0<<COM0A0)|(0<<COM0B0)|\	; Normal port operation
+					; (0<<WGM00)				; Total wavegen mode = 000 (normal)
 	out TIFR,	r16	; Clear interrupts
 	out PLLCSR,	r16	; Disable the PLL
-	inc r16			; Reset T/C1 prescaler
-	out OCR0A,	r16	; Max frequency
-	out GTCCR,	r16
-	inc r16			; (0<<COM0A0)|(0<<COM0B0)|\	; Normal port operation
-					; (2<<WGM00)				; Total wavegen mode = 010 (CTC)
-	out TCCR0A,	r16
-	; No interrupts, 3-wire mode (SPI),
-	; CLK src: Timer0 CMP match, No need to toggle pin	
-	ldi r16, 	(0<<USISIE)|(0<<USIOIE)|(1<<USIWM0)|(2<<USICLK)|(0<<USITC)
-	out USICR,	r16
-	
+	out USICR,	r16	; (0<<USISIE)|(0<<USIOIE)|\	; No interrupts
+					; (0<<USIWM0)|\				; USI disabled
+					; (0<<USICLK)|\				; No clock source
+					; (0<<USITC)				; Don't toggle anything
+	; Enable T1's PWM B, output the positive OCR1B,
+	; Force no output compares,
+	; Reset prescalers just in case
+	ldi	r16,	(0<<TSM)|(1<<PWM1B)|(0b10<<COM1B0)|(0<<FOC1B)|(0<<FOC1A)|(1<<PSR1)|(1<<PSR0)
+	out	GTCCR,	r16
+
 	; Set timer 1 to count 256 cycles
 	ldi r16,	(1<<TOIE1)	;	Enable overflow interrupt
 	out TIMSK,	r16			;__
-	ldi r16,	(1<<CS10)	;	Start clock at the rate of CK
+	; Don't reset T1 on CMP match with OCR1C,
+	; Disable T1's PWM A, output nothing from OCR1A,
+	; Enable T1 at the rate of CK
+	ldi r16,	(0<<CTC1)|(0<<PWM1A)|(0b00<<COM1A0)|(1<<CS10)
 	out TCCR1,	r16			;__
 	; Set Port modes
-	ldi r18,	(1<<PB3)|(1<<PB4)|(0<<DI)|(1<<DO)|(1<<USCK)
+	ldi r18,	(1<<PB3)|(1<<PWM_OUT)|(0<<DI)|(1<<DO)|(1<<USCK)
 	out DDRB,	r18
-	ldi r18,	(1<<PB3)|(1<<PB4)
+	ldi r18,	(1<<PB3)|(1<<PWM_OUT)
 	out PortB,	r18
-	ldi r16,	0x05
-	out USIDR,	r16
+
+	ldi r16,	(1<<CLKPCE)	;
+	ldi	r17,	(0<<CLKPS0)	;	Set to 8MHz
+	out	CLKPR,	r16			;
+	out	CLKPR,	r17			;__
+
+	ldi r26,	0xA5
+	out USIDR,	r26
 	sei
 Forever:
 	rjmp Forever
 
 Cycle:
-	cbi	PortB,	PB4
+	out	OCR1B,	r26		; Update sound
+
 	sbis PINB,	PINB0	; If no input pending, skip this
 	rjmp End
 
-	sbi	PortB,	PB4
 	cbi	PortB,	PB3
 
 	; Copied directly from Microchip's docs
@@ -125,63 +137,17 @@ Cycle:
 	sbrs r17, 	USIOIF
 	rjmp SPITransfer_loop0
 
-	sbi PortB,	PB3
-	; rcall	Delay
-	cbi	PortB, 	PB3
-	; ldi	r17,	(1<<USIOIF)
-	; out	USISR,	r17
-	; SPITransfer_loop1:
-	; out	USICR,	r16
-	; rcall	Delay
-	; in	r17, 	USISR
-	; sbrs r17, 	USIOIF
-	; rjmp SPITransfer_loop1
-
-	cbi	PortB,	PB4
+	sbi PortB,	PB3		;	Latch the '595
+	cbi	PortB, 	PB3		;__
 
 	in	r16,	USIBR
 	cpi	r16,	0x80
 	brne End
 	sbi PortB,	PB3
-
-	; in	r16,	USIDR
-
-; 	; Enable Timer 0 at max freq
-; 	out USIDR,	r31	; Clear SPI Data register
-; 	; No force strobe, Total wavegen mode = 010 (CTC),
-; 	; Clock source = clkIO/1024 (no prescaling)
-; 	ldi r16,	(0<<FOC0A)|(0<<FOC0B)|(0<<WGM02)|(5<<CS00)			
-; 	out TCCR0B,	r16
-; 	; Wait, somehow
-; WaitLoop:
-; 	in	r16,	USISR							;	Has counter overflowed yet?
-; 	sbrs r16,	USIOIF							;__ If no, jump back
-; 	rjmp WaitLoop
-	
-	; out	TCCR0B,	r31		; Disable clock
-	
-	; Get output
-
-; 	; The address is right
-; 	; Enable Timer 0 at max freq
-; 	out USIDR,	r31	; Clear SPI Data register
-; 	ldi r16,	(0<<FOC0A)|(0<<FOC0B)|(0<<WGM02)|(1<<USICS0)
-; 	out TCCR0B,	r16
-; 	; Wait, somehow
-; WaitLoop2:
-; 	in	r16,	USISR
-; 	sbrs r16,	USIOIF
-; 	rjmp WaitLoop2
-
-; 	out	TCCR0B,	r31		; Disable clock
-; 	; Get output, Toggle LED
-	; in	r16,	USIDR
-	; and	r16,	r18
-	; out	PortB,	r16
-	; eor r19,	r18
-	; out PortB,	r19
+	ser	r26
 
 End:
+	inc r26
 	reti
 
 
