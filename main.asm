@@ -110,6 +110,7 @@ Init:
 
 	ldi r26,	0xA5
 	out USIDR,	r26
+	ldi r27,	0x01
 	sei
 Forever:
 	rjmp Forever
@@ -124,30 +125,28 @@ Cycle:
 
 	; Copied directly from Microchip's docs
 
-	ldi	r16,	(1<<USIOIF)|(8<<USICNT0)
-	out	USISR,	r16
-	ldi	r16,	(1<<USIWM0)|(0<<USICS1)|(1<<USICLK)|(1<<USITC)
-	ldi r18,	(1<<USIWM0)|(0<<USICS1)|(0<<USICLK)|(1<<USITC)
-	SPITransfer_loop0:
-	out	USICR,	r18	; make rising edge
-	; rcall	Delay
-	out USICR,	r16	; shift data out on falling edge, in right before
-	; rcall	Delay
-	in	r17, 	USISR
-	sbrs r17, 	USIOIF
-	rjmp SPITransfer_loop0
+	mov	r16,	r26
+	rcall	SPITransfer
+
+	andi r16,	0x7F	;	Reg 0 has address
+	mov r0,		r16		;__
+
+	rcall 	SPITransfer_action
+
+	mov	r1,		r16		;__	Reg 1 has data
 
 	sbi PortB,	PB3		;	Latch the '595
 	cbi	PortB, 	PB3		;__
 
-	in	r16,	USIBR
-	cpi	r16,	0x80
+	mov r16,	r0
+	cpi	r16,	0x00
 	brne End
 	sbi PortB,	PB3
 	ser	r26
+	mov	r27,	r1
 
 End:
-	inc r26
+	add r26,	r27
 	reti
 
 
@@ -163,3 +162,30 @@ End:
 ; 			brne delay_loop
 	
 ; 	ret
+
+SPITransfer:	; 24 cycles + 3 (RCALL)
+	ldi	r17,	(1<<USIWM0)|(0<<USICS0)|(1<<USITC)|(1<<USICLK)
+SPITransfer_action:	; 23 cycles + 3 (RCALL)
+	out	USIDR,	r16
+	ldi	r16,	(1<<USIWM0)|(0<<USICS0)|(1<<USITC)
+
+
+	out	USICR,	r16 ; Rising clock edge					;	MSB
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	6
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	5
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	4
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	3
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	2
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	1
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+	out	USICR,	r16 ; Rising clock edge					;	LSB
+	out	USICR,	r17 ; Falling clock edge, shift data	;__
+
+	in	r16,	USIDR
+ret
