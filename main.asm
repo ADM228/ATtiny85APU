@@ -72,7 +72,10 @@
 ;	0x1n	| VOLX	|UseEnvX|Env/Smp| Slot# |
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x15	| MIX0	|NoiEnD	|ToneEnD|NoiEnC	|ToneEnC|NoiEnB	|ToneEnB|NoiEnA	|ToneEnA|
-;	0x16	| MIX1	|	-----------------------------------------	|NoiEnE	|ToneEnE|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x16	| PANAB	|Right vol ch. B|Left vol ch. B |Right vol ch. A|Left vol ch. A |
+;	0x17	| PANCD	|Right vol ch. D|Left vol ch. D |Right vol ch. C|Left vol ch. C |
+;	0x18	| MXPNE	|Right vol ch. E|Left vol ch. E | ------------	|NoiEnE	|ToneEnE|
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1D	| EPLA	|				Pitch increment value for envelope A			|
 ;	0x1E	| EPLB	|				Pitch increment value for envelope B			|
@@ -103,6 +106,18 @@
 .include "./tn85def.inc"
 
 ; Internal configuration - DO NOT TOUCH
+.if !defined(STEREO) || !defined(MONO)
+	.if defined(OUTPUT_PB4) || defined(OUTPUT_DAC7311) || defined(OUTPUT_DAC6311) || defined(OUTPUT_DAC5311) || defined(OUTPUT_MCP4801) || defined(OUTPUT_MCP4811) || defined(OUTPUT_MCP4821)
+		.define MONO 1
+	.elseif defined (OUTPUT_DAC7612) || defined(OUTPUT_MCP4802) || defined(OUTPUT_MCP4812) || defined(OUTPUT_MCP4822)
+		.define STEREO 1
+	.endif
+.elseif defined(OUTPUT_PB4) && defined(STEREO)
+	.error "PB4 cannot be stereo (it's a single pin, you can't output multiple channels on one analog pin)"
+.elseif defined(MONO) && defined(STEREO) && MONO && STEREO
+	.error "Select stereo or mono output"
+.endif
+
 .if defined(OUTPUT_PB4) || defined(OUTPUT_DAC5311) || defined(OUTPUT_MCP4801)
 	.define BITDEPTH 8
 .elseif defined(OUTPUT_DAC6311) || defined(OUTPUT_MCP4811)
@@ -113,28 +128,31 @@
 	.error "Unsupported DAC type"
 .endif
 
+
+
 .equ	USCK	= PB2
 .equ	DO		= PB1
 .equ	DI		= PB0
 
 .equ	PWM_OUT	= PB4
 
-; ; r0..4 are temp regs
+; r0..4 are temp regs
 
-; .define	PHASE_ACC_A_LO	r4
-; .define	PHASE_ACC_A_HI	r5
-; .define	PHASE_ACC_B_LO	r6
-; .define	PHASE_ACC_B_HI	r7
-; .define	PHASE_ACC_C_LO	r8
-; .define	PHASE_ACC_C_HI	r9
-; .define	PHASE_ACC_D_LO	r10
-; .define	PHASE_ACC_D_HI	r11
-; .define	PHASE_ACC_E_LO	r12
-; .define	PHASE_ACC_E_HI	r13
-; .define	PHASE_ACC_N_LO	r14
-; .define	PHASE_ACC_N_HI	r15
+.def	PHASE_ACC_A_LO	= r4
+.def	PHASE_ACC_A_HI	= r5
+.def	PHASE_ACC_B_LO	= r6
+.def	PHASE_ACC_B_HI	= r7
+.def	PHASE_ACC_C_LO	= r8
+.def	PHASE_ACC_C_HI	= r9
+.def	PHASE_ACC_D_LO	= r10
+.def	PHASE_ACC_D_HI	= r11
+.def	PHASE_ACC_E_LO	= r12
+.def	PHASE_ACC_E_HI	= r13
+.def	PHASE_ACC_N_LO	= r14
+.def	PHASE_ACC_N_HI	= r15
 
 .dseg
+
 ShiftedCMPValues:	.byte 6
 Increments:			.byte 6
 NoiseLFSR:			.byte 2
@@ -206,6 +224,22 @@ Init:
 	ldi r26,	0xA5
 	out USIDR,	r26
 	ldi r27,	0x01
+
+	movw PHASE_ACC_A_LO, r0
+	; movw PHASE_ACC_B_LO, r0
+	; movw PHASE_ACC_C_LO, r0
+	; movw PHASE_ACC_D_LO, r0
+	; movw PHASE_ACC_E_LO, r0
+	; movw PHASE_ACC_N_LO, r0
+
+	sts ShiftedCMPValues+0,	r27
+	; all others
+	sts Increments+0,	r0
+	; all others
+
+
+
+
 	sei
 Forever:
 	rjmp Forever
@@ -214,7 +248,7 @@ Cycle:
 	out	OCR1B,	r26		; Update sound
 
 	sbis PINB,	PINB0	; If no input pending, skip this
-	rjmp End
+	rjmp PhaseAccumulatorUpdate
 
 	cbi	PortB,	PB3
 
@@ -235,13 +269,35 @@ Cycle:
 
 	mov r16,	r0
 	cpi	r16,	0x00
-	brne End
+	brne CMP2
 	sbi PortB,	PB3
-	ser	r26
-	mov	r27,	r1
-
-End:
-	add r26,	r27
+	sts	Increments+0,	r1
+	rjmp PhaseAccumulatorUpdate
+CMP2:
+	cpi	r16,	0x06
+	brne PhaseAccumulatorUpdate
+		ldi	ZH,		(ShiftedTable>>7)&0xFF
+		mov	ZL,		r1
+		andi ZL,	0x7
+		subi ZL,	0x100-((ShiftedTable<<1)&0xFF)	
+		lpm r2,		Z
+		sts	ShiftedCMPValues+0,	r2
+		bld	r1,		4
+		brtc PhaseAccumulatorUpdate
+			clr PHASE_ACC_A_LO
+			clr	PHASE_ACC_A_HI
+PhaseAccumulatorUpdate:
+	clr	r3
+	lds	r0,		Increments+0
+	add	PHASE_ACC_A_LO,	r0
+	adc	PHASE_ACC_A_HI,	r3
+	lds	r0,		ShiftedCMPValues+0
+	cp	PHASE_ACC_A_HI,	r0
+	brlo RealEnd
+		inc r26
+		dec	r0
+		and	PHASE_ACC_A_HI,	r0
+RealEnd:
 	reti
 
 Multiply:	; 28 cycles  
@@ -268,6 +324,7 @@ Multiply:	; 28 cycles
 
 	clr r3
 
+	.if MONO
 	; 1. Multiply by 3 : 6 cycles
 	movw r0,	r16
 	clc
@@ -276,6 +333,7 @@ Multiply:	; 28 cycles
 	add	r16,	r1
 	adc	r17,	r2
 	; r16:17 now contains the value multiplied by 3
+	.endif
 
 	movw r0,	r16	; High:Mid is now 3X, '' 00110110
 	; clc	; Never occurs within valid range
@@ -303,9 +361,26 @@ Multiply:	; 28 cycles
 	ldi	r16,	$F0		; X0ZY
 	and	r1,		r16		; X00Y
 	or	r1,		r0		; XY--
+	; BAM r0 now has the output value
+
+	.elseif BITDEPTH > 8 && BITDEPTH <= 12
+	.if defined(OUTPUT_DAC7311) || defined(OUTPUT_DAC6311) || defined(OUTPUT_DAC5311) || defined(OUTPUT_DAC7612)
+	; TI DACs have a 2-bit prefix before the data
+						; r1:r0 = 0000xxxx yyyyzzzz
+	clc					;__
+	rol	r1				; r1:r0 = 000xxxxy yyyzzzz0
+	rol	r0				;__
+	rol r1				; r1:r0	= 00xxxxyy yyzzzz00
+	rol r0				;__
+	; Bam the output is now correct
+	.elseif defined(OUTPUT_MCP4801) || defined(OUTPUT_MCP4811) || defined(OUTPUT_MCP4821) || defined(OUTPUT_MCP4802) || defined(OUTPUT_MCP4812) || defined(OUTPUT_MCP4822)
+	; Microchip DACs have a 4-bit prefix, but the control bits gotta be configured
+	ldi	r16,	$30		; r1:r0	= 0011xxxx yyyyzzzz
+	or	r1,		r16		;__		
+	; Done, it's 1x and not shutting down
+	.endif
 	.endif
 
-	; BAM r0 now has the output value
 
 
 ; Delay:
