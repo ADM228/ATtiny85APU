@@ -38,7 +38,108 @@
 ;						  '---'
 
 
+;	Registers:
+
+;					 _______________________________________________________________
+;	Bit ->			|	7	|	6	|	5	|	4	|	3	|	2	|	1	|	0	|
+;	Index	|  Name |=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x00	| PILOA	|		Pitch increment value for tone on channel A				|
+;	0x01	| PILOB	|		Pitch increment value for tone on channel B				|
+;	0x02	| PILOC	|		Pitch increment value for tone on channel C				|
+;	0x03	| PILOD	|		Pitch increment value for tone on channel D				|
+;	0x04	| PILOE	|		Pitch increment value for tone on channel E				|
+;	0x05	| PILON	|		Pitch increment value for noise generator				|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x06	| PHIAB	|Ch.B PR|Channel B octave number|Ch.A PR|Channel A octave number|	PR = Phase reset
+;	0x07	| PHICD	|Ch.D PR|Channel D octave number|Ch.C PR|Channel C octave number|
+;	0x08	| PHIEN	|NoisePR|Noise gen octave number|Ch.E PR|Channel E octave number|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x09	| DUTYA	|					Channel A tone duty cycle					|
+;	0x0A	| DUTYB	|					Channel B tone duty cycle					|
+;	0x0B	| DUTYC	|					Channel C tone duty cycle					|
+;	0x0C	| DUTYD	|					Channel D tone duty cycle					|
+;	0x0D	| DUTYE	|					Channel E tone duty cycle					|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x0E	| NTPLO	|			Noise LFSR inversion value (low byte)				|
+;	0x0F	| NTPHI	|			Noise LFSR inversion value (high byte)				|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;					|		When UseEnvX == 0, Channel X uses static volume			|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x1n	| VOLX	|UseEnvX|				Channel X static volume					|	n = 0..4, X = A..E
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;					|	When UseEnvX == 1, Channel X uses an envelope or sample		|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x1n	| VOLX	|UseEnvX|Env/Smp| Slot# |
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x15	| MIX0	|NoiEnD	|ToneEnD|NoiEnC	|ToneEnC|NoiEnB	|ToneEnB|NoiEnA	|ToneEnA|
+;	0x16	| MIX1	|	-----------------------------------------	|NoiEnE	|ToneEnE|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x1D	| EPLA	|				Pitch increment value for envelope A			|
+;	0x1E	| EPLB	|				Pitch increment value for envelope B			|
+;	0x1F	| EPH	|EnvB PR| Envelope B octave num |EnvA PR| Envelope A octave num |
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x20	| SPLA	|					Low byte of sample A pointer				|	
+;	0x21	| SPLB	|					Low byte of sample B pointer				|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x22	| SPMA	|					Mid byte of sample A pointer				|
+;	0x23	| SPMB	|					Mid byte of sample B pointer				|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x24	| SPHA	|					High byte of sample A pointer				|
+;	0x25	| SPHA	|					High byte of sample B pointer				|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+
+;	0x26	| SLLA	|					LENGTH
+;	0x27	| SLMA	|
+;	0x28	| SLLB	|
+;	0x29	| SLMB	|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+
+; ENVELOPES????????? HOW????
+;			|_______________________________________________________________|
+
+.define OUTPUT_PB4
+
 .include "./tn85def.inc"
+
+; Internal configuration - DO NOT TOUCH
+.if defined(OUTPUT_PB4) || defined(OUTPUT_DAC5311) || defined(OUTPUT_MCP4801)
+	.define BITDEPTH 8
+.elseif defined(OUTPUT_DAC6311) || defined(OUTPUT_MCP4811)
+	.define BITDEPTH 10
+.elseif defined(OUTPUT_DAC7311) || defined(OUTPUT_MCP4821)
+	.define BITDEPTH 12
+.else	
+	.error "Unsupported DAC type"
+.endif
+
+.equ	USCK	= PB2
+.equ	DO		= PB1
+.equ	DI		= PB0
+
+.equ	PWM_OUT	= PB4
+
+; ; r0..4 are temp regs
+
+; .define	PHASE_ACC_A_LO	r4
+; .define	PHASE_ACC_A_HI	r5
+; .define	PHASE_ACC_B_LO	r6
+; .define	PHASE_ACC_B_HI	r7
+; .define	PHASE_ACC_C_LO	r8
+; .define	PHASE_ACC_C_HI	r9
+; .define	PHASE_ACC_D_LO	r10
+; .define	PHASE_ACC_D_HI	r11
+; .define	PHASE_ACC_E_LO	r12
+; .define	PHASE_ACC_E_HI	r13
+; .define	PHASE_ACC_N_LO	r14
+; .define	PHASE_ACC_N_HI	r15
+
+.dseg
+ShiftedCMPValues:	.byte 6
+Increments:			.byte 6
+NoiseLFSR:			.byte 2
+NoiseXOR:			.byte 2
+
 
 .cseg
 
@@ -46,12 +147,6 @@
 rjmp Init
 .org OVF1addr
 rjmp Cycle
-
-.equ	USCK	= PB2
-.equ	DO		= PB1
-.equ	DI		= PB0
-
-.equ	PWM_OUT	= PB4
 
 ; .org INT_VECTORS_SIZE	; Unnecessary
 Init:
@@ -125,15 +220,15 @@ Cycle:
 
 	; Copied directly from Microchip's docs
 
-	mov	r16,	r26
+	mov	r18,	r26
 	rcall	SPITransfer
 
-	andi r16,	0x7F	;	Reg 0 has address
-	mov r0,		r16		;__
+	andi r18,	0x7F	;	Reg 0 has address
+	mov r0,		r18		;__
 
-	rcall 	SPITransfer_action
+	rcall 	SPITransfer_noOut
 
-	mov	r1,		r16		;__	Reg 1 has data
+	mov	r1,		r18		;__	Reg 1 has data
 
 	sbi PortB,	PB3		;	Latch the '595
 	cbi	PortB, 	PB3		;__
@@ -149,6 +244,68 @@ End:
 	add r26,	r27
 	reti
 
+Multiply:	; 28 cycles  
+	; needs 3 registers
+
+	; Constant multiplier of 822,
+	; which is 11 00110110 in binary,
+	; is abused to shift less
+
+	; Specifically, stuff is multiplied by 3,
+	; as the bits are always in pairs -
+	;	11 00110110
+	;   \/   \/ \/
+	;
+	; Then shift a bunch and add together
+
+	; input low: r16
+	; input high: r17
+
+	; output low: r2
+	; output mid: r0
+	; output high: r1
+	; tmp 0:	  r3
+
+	clr r3
+
+	; 1. Multiply by 3 : 6 cycles
+	movw r0,	r16
+	clc
+	rol	r1
+	rol r2
+	add	r16,	r1
+	adc	r17,	r2
+	; r16:17 now contains the value multiplied by 3
+
+	movw r0,	r16	; High:Mid is now 3X, '' 00110110
+	; clc	; Never occurs within valid range
+	rol	r16
+	rol	r17				
+	mov	r2,		r16		;
+	add	r0,		r17		;	.. 00110''0
+	adc	r1,		r3		;__
+	; Shift further by 3
+	; clc 	; Cannot occur
+	rol r16				;	Total shift: 2
+	rol r17				;__
+	rol r16				;	Total shift: 3
+	rol r17				;__
+	rol r16				;	Total shift: 4
+	rol r17				;__
+	add	r2,		r16		;
+	adc	r0,		r17		;	.. 00''0..0
+	adc	r1,		r3		;__
+
+	.if BITDEPTH == 8
+						; r1:r0 = 0XYZ
+	swap r1				; 0XZY
+	swap r0				; X0ZY
+	ldi	r16,	$F0		; X0ZY
+	and	r1,		r16		; X00Y
+	or	r1,		r0		; XY--
+	.endif
+
+	; BAM r0 now has the output value
 
 
 ; Delay:
@@ -165,10 +322,10 @@ End:
 
 SPITransfer:	; 24 cycles + 3 (RCALL)
 	ldi	r17,	(1<<USIWM0)|(0<<USICS0)|(1<<USITC)|(1<<USICLK)
-SPITransfer_action:	; 23 cycles + 3 (RCALL)
-	out	USIDR,	r16
 	ldi	r16,	(1<<USIWM0)|(0<<USICS0)|(1<<USITC)
-
+SPITransfer_action:	; 22 cycles + 3 (RCALL)
+	out	USIDR,	r18
+SPITransfer_noOut:	; 21 cycles + 3 (RCALL)
 
 	out	USICR,	r16 ; Rising clock edge					;	MSB
 	out	USICR,	r17 ; Falling clock edge, shift data	;__
@@ -187,5 +344,8 @@ SPITransfer_action:	; 23 cycles + 3 (RCALL)
 	out	USICR,	r16 ; Rising clock edge					;	LSB
 	out	USICR,	r17 ; Falling clock edge, shift data	;__
 
-	in	r16,	USIDR
+	in	r18,	USIDR
 ret
+
+ShiftedTable:
+.db 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
