@@ -153,11 +153,47 @@
 
 .dseg
 
-ShiftedCMPValues:	.byte 6
 Increments:			.byte 6
+
+OctaveValues:		.byte 6
+ShiftedCPValues:	.byte 6
+DutyCycles:			.byte 5
+ShiftedDutyValues_L:.byte 5
+ShiftedDutyValues_H:.byte 5
+
 NoiseLFSR:			.byte 2
 NoiseXOR:			.byte 2
+Volumes:			.byte 5
 
+.equ OctaveValueA	= OctaveValues+0
+.equ OctaveValueC	= OctaveValues+1
+.equ OctaveValueE	= OctaveValues+2
+.equ OctaveValueB	= OctaveValues+3
+.equ OctaveValueD	= OctaveValues+4
+.equ OctaveValueN	= OctaveValues+5
+
+.equ ShiftedCPValueA	= ShiftedCPValues+0
+.equ ShiftedCPValueC	= ShiftedCPValues+1
+.equ ShiftedCPValueE	= ShiftedCPValues+2
+.equ ShiftedCPValueB	= ShiftedCPValues+3
+.equ ShiftedCPValueD	= ShiftedCPValues+4
+.equ ShiftedCPValueN	= ShiftedCPValues+5
+
+.equ DutyCycleA			= DutyCycles+0
+.equ ShiftedDutyCycleAL	= ShiftedDutyValues_L+0
+.equ ShiftedDutyCycleAH	= ShiftedDutyValues_H+0
+.equ DutyCycleC			= DutyCycles+1
+.equ ShiftedDutyCycleCL	= ShiftedDutyValues_L+1
+.equ ShiftedDutyCycleCH	= ShiftedDutyValues_H+1
+.equ DutyCycleE			= DutyCycles+2
+.equ ShiftedDutyCycleEL	= ShiftedDutyValues_L+2
+.equ ShiftedDutyCycleEH	= ShiftedDutyValues_H+2
+.equ DutyCycleB			= DutyCycles+3
+.equ ShiftedDutyCycleBL	= ShiftedDutyValues_L+3
+.equ ShiftedDutyCycleBH	= ShiftedDutyValues_H+3
+.equ DutyCycleD			= DutyCycles+4
+.equ ShiftedDutyCycleDL	= ShiftedDutyValues_L+4
+.equ ShiftedDutyCycleDH	= ShiftedDutyValues_H+4
 
 .cseg
 
@@ -181,6 +217,7 @@ Init:
 	clr r19
 	clr r0
 	clr r1
+	clr r3
 	clr r16
 	out TCCR0B,	r16	; (0<<FOC0A)|(0<<FOC0B)|\	; No force strobe
 					; (0<<WGM02)|\				; Total wavegen mode = 000 (normal)
@@ -223,7 +260,6 @@ Init:
 
 	ldi r26,	0xA5
 	out USIDR,	r26
-	ldi r27,	0x01
 
 	movw PHASE_ACC_A_LO, r0
 	; movw PHASE_ACC_B_LO, r0
@@ -232,8 +268,20 @@ Init:
 	; movw PHASE_ACC_E_LO, r0
 	; movw PHASE_ACC_N_LO, r0
 
-	sts ShiftedCMPValues+0,	r27
+	ldi r27,	0x08
+	sts ShiftedCPValueA,	r27
 	; all others
+	ldi	r27,	0x04
+	sts OctaveValueA,		r27
+
+	ldi r27,	0xFF
+	sts	Volumes+0,			r27
+
+	ldi r27,	0x80
+	sts	DutyCycleA,			r27
+	sts	ShiftedDutyCycleAL,	r27
+	sts	ShiftedDutyCycleAH,	r0
+
 	sts Increments+0,	r0
 	; all others
 
@@ -248,7 +296,9 @@ Cycle:
 	out	OCR1B,	r26		; Update sound
 
 	sbis PINB,	PINB0	; If no input pending, skip this
-	rjmp PhaseAccumulatorUpdate
+	rjmp AfterSPI
+
+	clr	r3
 
 	cbi	PortB,	PB3
 
@@ -257,46 +307,56 @@ Cycle:
 	mov	r18,	r26
 	rcall	SPITransfer
 
-	andi r18,	0x7F	;	Reg 0 has address
-	mov r0,		r18		;__
 
+	andi r18,	0x7F	;
+	cpi	r18,	0x16	;
+	brlo L000			;	Get reg number
+	ldi	r18,	0x10	;
+	L000:				;__
+	ldi	YL,		0x60	;
+	add	YL,		r18		;	Get reg number into Y
+	clr	YH				;__
+
+	ldi	ZH,		(CallTable>>7)&0xFF
+	ldi	ZL,		((CallTable<<1)&0xFF)	
+	add ZL,		r18		;
+	adc	ZH,		YH		;
+	add	ZL,		r18		;
+	adc	ZH,		YH		;
+	lpm	r0,		Z+		;	Get IJMP pointer into Z
+	lpm	r1,		Z+		;
+	movw ZL,	r0		;__
+
+	out	USIDR,	ZL
 	rcall 	SPITransfer_noOut
 
 	mov	r1,		r18		;__	Reg 1 has data
 
 	sbi PortB,	PB3		;	Latch the '595
-	cbi	PortB, 	PB3		;__
 
-	mov r16,	r0
-	cpi	r16,	0x00
-	brne CMP2
-	sbi PortB,	PB3
-	sts	Increments+0,	r1
-	rjmp PhaseAccumulatorUpdate
-CMP2:
-	cpi	r16,	0x06
-	brne PhaseAccumulatorUpdate
-		ldi	ZH,		(ShiftedTable>>7)&0xFF
-		mov	ZL,		r1
-		andi ZL,	0x7
-		subi ZL,	0x100-((ShiftedTable<<1)&0xFF)	
-		lpm r2,		Z
-		sts	ShiftedCMPValues+0,	r2
-		bld	r1,		4
-		brtc PhaseAccumulatorUpdate
-			clr PHASE_ACC_A_LO
-			clr	PHASE_ACC_A_HI
-PhaseAccumulatorUpdate:
+	ijmp
+
+AfterSPI:
+	clr r26
+PhaseAccAUpd0:
 	clr	r3
 	lds	r0,		Increments+0
 	add	PHASE_ACC_A_LO,	r0
 	adc	PHASE_ACC_A_HI,	r3
-	lds	r0,		ShiftedCMPValues+0
+	lds	r0,		ShiftedCPValueA
 	cp	PHASE_ACC_A_HI,	r0
-	brlo RealEnd
-		inc r26
+	brlo PhaseAccAUpd1
 		dec	r0
 		and	PHASE_ACC_A_HI,	r0
+PhaseAccAUpd1:
+	lds	r0,		ShiftedDutyCycleAH
+	cp	PHASE_ACC_A_HI,	r0
+	brlo RealEnd
+		lds	r0,		ShiftedDutyCycleAL
+		cp	PHASE_ACC_A_LO,	r0
+		brlo RealEnd
+			; lds	r26,	Volumes+0
+			ldi	r26,	0xFF
 RealEnd:
 	reti
 
@@ -421,6 +481,134 @@ SPITransfer_noOut:	; 21 cycles + 3 (RCALL)
 
 	in	r18,	USIDR
 ret
+
+PILOX_Routine:
+	std	Y+Increments-0x60,		r1
+	cbi	PortB, 	PB3
+	rjmp AfterSPI
+
+LFSR_Routine:
+	std Y+NoiseXOR-0x60-0x0E,	r1
+	cbi	PortB, 	PB3
+	rjmp AfterSPI
+
+PHIAB_Routine:
+	; Y has 0x06
+	ldi	ZH,		(ShiftedTable>>7)&0xFF
+	mov	ZL,		r1
+	andi ZL,	0x7
+	ldd	r2,		Y+OctaveValueA-0x60-0x06
+	cp	r2,		ZL
+	breq L001	; If octave not changed, do nothing
+		std	Y+OctaveValueA-0x60-0x06, ZL			;__	Store octave
+
+		subi ZL,	0x100-((ShiftedTable<<1)&0xFF)	;
+		lpm r0,		Z								;	Get shifted compare value
+		std	Y+ShiftedCPValueA-0x60-0x06,	r0		;__
+
+		clr	r0
+		clc
+		ldd	r2,		Y+DutyCycleA-0x60-0x06	;
+		sbrc r1,	2	;
+		rjmp L003		;
+			rol r2		;
+			rol r0		;
+			rol r2		;	Shift duty 4 times if needed
+			rol r0		;
+			rol r2		;
+			rol r0		;
+			rol r2		;
+			rol r0		;
+		L003:			;__
+		sbrc r1,	1	;
+		rjmp L004		;
+			rol r2		;
+			rol r0		;	Shift duty 2 times if needed
+			rol r2		;
+			rol r0		;__
+		L004:			;
+		sbrc r1,	0	;
+		rjmp L005		;	Shift duty once more if needed
+			rol r2		;	
+			rol r0		;__
+
+		L005:			; Reset phase accumulator
+		std	Y+ShiftedDutyCycleAL-0x60-0x06,	r2
+		std	Y+ShiftedDutyCycleAH-0x60-0x06,	r0
+		
+		sbrs r1,	3	
+		rjmp L001
+			clr PHASE_ACC_A_LO
+			clr	PHASE_ACC_A_HI	; TODO fix
+	L001:
+	mov	ZL,		r1
+	swap ZL
+	andi ZL,	0x7
+	ldd	r2,		Y+OctaveValueB-0x60-0x06
+	cp	r2,		ZL
+	breq L002
+		std	Y+OctaveValueB-0x60-0x06, ZL			;__	Store octave
+
+		subi ZL,	0x100-((ShiftedTable<<1)&0xFF)	;
+		lpm r0,		Z								;	Get shifted compare value
+		std	Y+ShiftedCPValueB-0x60-0x06,	r0		;__
+
+		clr	r0
+		clc
+		ldd	r2,		Y+DutyCycleB-0x60-0x06	;
+		sbrc r1,	6	;
+		rjmp L006		;
+			rol r2		;
+			rol r0		;
+			rol r2		;	Shift duty 4 times if needed
+			rol r0		;
+			rol r2		;
+			rol r0		;
+			rol r2		;
+			rol r0		;
+		L006:			;__
+		sbrc r1,	5	;
+		rjmp L007		;
+			rol r2		;
+			rol r0		;	Shift duty 2 times if needed
+			rol r2		;
+			rol r0		;__
+		L007:			;
+		sbrc r1,	4	;
+		rjmp L008		;	Shift duty once more if needed
+			rol r2		;	
+			rol r0		;__
+
+		L008:
+		std	Y+ShiftedDutyCycleBL-0x60-0x06,	r2
+		std	Y+ShiftedDutyCycleBH-0x60-0x06,	r0
+
+		sbrs r1,	7
+		rjmp L002
+			clr PHASE_ACC_B_LO
+			clr	PHASE_ACC_B_HI
+	L002:
+	cbi	PortB, 	PB3
+	rjmp AfterSPI
+
+PHICD_Routine:
+PHIEN_Routine:
+DUTYX_Routine:
+VOLX_Routine:
+Dummy_Routine:
+	rjmp AfterSPI
+
+CallTable:
+	; 0x00..05		(Pitch Lo X)
+	.dw PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine
+	; 0x06..08		(Pitch Hi XY)
+	.dw PHIAB_Routine, PHICD_Routine, PHIEN_Routine
+	; 0x09..0D		(Duty Cycle X)
+	.dw DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine
+	.dw LFSR_Routine, LFSR_Routine
+	; 0x10..15
+	.dw LFSR_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine
+
 
 ShiftedTable:
 .db 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
