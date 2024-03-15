@@ -244,7 +244,7 @@ Init:
 	out TIMSK,	r16			;__
 	; Don't reset T1 on CMP match with OCR1C,
 	; Disable T1's PWM A, output nothing from OCR1A,
-	; Enable T1 at the rate of CK
+	; Enable T1 at the rate of CK/2	(512 cycles)
 	ldi r16,	(0<<CTC1)|(0<<PWM1A)|(0b00<<COM1A0)|(1<<CS10)
 	out TCCR1,	r16			;__
 	; Set Port modes
@@ -282,7 +282,7 @@ Init:
 	sts	ShiftedDutyCycleAL,	r27
 	sts	ShiftedDutyCycleAH,	r0
 
-	sts Increments+0,	r0
+	sts Increments+0,	r27
 	; all others
 
 
@@ -333,6 +333,7 @@ Cycle:
 	mov	r1,		r18		;__	Reg 1 has data
 
 	sbi PortB,	PB3		;	Latch the '595
+	cbi	PortB, 	PB3		;__
 
 	ijmp
 
@@ -355,10 +356,19 @@ PhaseAccAUpd1:
 		lds	r0,		ShiftedDutyCycleAL
 		cp	PHASE_ACC_A_LO,	r0
 		brlo RealEnd
-			; lds	r26,	Volumes+0
-			ldi	r26,	0xFF
+			lds	r0,		Volumes+0
+			mov r26,	r0
 RealEnd:
+	in	r0,		TIFR
+	sbrs r0,	TOV1
 	reti
+Delay:
+	in	r0,		TCNT1
+	com	r0
+	L00B:
+		dec	r0
+		brne L00B
+	rjmp RealEnd
 
 Multiply:	; 28 cycles  
 	; needs 3 registers
@@ -484,12 +494,10 @@ ret
 
 PILOX_Routine:
 	std	Y+Increments-0x60,		r1
-	cbi	PortB, 	PB3
 	rjmp AfterSPI
 
 LFSR_Routine:
 	std Y+NoiseXOR-0x60-0x0E,	r1
-	cbi	PortB, 	PB3
 	rjmp AfterSPI
 
 PHIAB_Routine:
@@ -536,10 +544,6 @@ PHIAB_Routine:
 		std	Y+ShiftedDutyCycleAL-0x60-0x06,	r2
 		std	Y+ShiftedDutyCycleAH-0x60-0x06,	r0
 		
-		sbrs r1,	3	
-		rjmp L001
-			clr PHASE_ACC_A_LO
-			clr	PHASE_ACC_A_HI	; TODO fix
 	L001:
 	mov	ZL,		r1
 	swap ZL
@@ -583,18 +587,27 @@ PHIAB_Routine:
 		std	Y+ShiftedDutyCycleBL-0x60-0x06,	r2
 		std	Y+ShiftedDutyCycleBH-0x60-0x06,	r0
 
-		sbrs r1,	7
-		rjmp L002
-			clr PHASE_ACC_B_LO
-			clr	PHASE_ACC_B_HI
+
 	L002:
-	cbi	PortB, 	PB3
+	sbrs r1,	3	
+	rjmp L009
+		clr PHASE_ACC_A_LO
+		clr	PHASE_ACC_A_HI	; TODO fix
+	L009:
+	sbrs r1,	7
+	rjmp L00A
+		clr PHASE_ACC_B_LO
+		clr	PHASE_ACC_B_HI
+	L00A:
+	rjmp AfterSPI
+
+VOLX_Routine:
+	std Y+Volumes-0x60-0x10,	r1
 	rjmp AfterSPI
 
 PHICD_Routine:
 PHIEN_Routine:
 DUTYX_Routine:
-VOLX_Routine:
 Dummy_Routine:
 	rjmp AfterSPI
 
@@ -607,7 +620,7 @@ CallTable:
 	.dw DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine
 	.dw LFSR_Routine, LFSR_Routine
 	; 0x10..15
-	.dw LFSR_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine
+	.dw VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine
 
 
 ShiftedTable:
