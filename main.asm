@@ -138,62 +138,106 @@
 
 ; r0..4 are temp regs
 
-.def	PHASE_ACC_A_LO	= r4
-.def	PHASE_ACC_A_HI	= r5
-.def	PHASE_ACC_B_LO	= r6
-.def	PHASE_ACC_B_HI	= r7
-.def	PHASE_ACC_C_LO	= r8
-.def	PHASE_ACC_C_HI	= r9
-.def	PHASE_ACC_D_LO	= r10
-.def	PHASE_ACC_D_HI	= r11
-.def	PHASE_ACC_E_LO	= r12
-.def	PHASE_ACC_E_HI	= r13
-.def	PHASE_ACC_N_LO	= r14
-.def	PHASE_ACC_N_HI	= r15
+.def	PhaseAccA_L	= r4
+.def	PhaseAccA_H	= r5
+.def	PhaseAccB_L	= r6
+.def	PhaseAccB_H	= r7
+.def	PhaseAccC_L	= r8
+.def	PhaseAccC_H	= r9
+.def	PhaseAccD_L	= r10
+.def	PhaseAccD_H	= r11
+.def	PhaseAccE_L	= r12
+.def	PhaseAccE_H	= r13
+.def	PhaseAccN_L	= r14
+.def	PhaseAccN_H	= r15
 
 .dseg
-
-Increments:			.byte 6
-
-OctaveValues:		.byte 6
-ShiftedCPValues:	.byte 6
-DutyCycles:			.byte 5
-ShiftedDutyValues_L:.byte 5
-ShiftedDutyValues_H:.byte 5
-
 NoiseLFSR:			.byte 2
+
 NoiseXOR:			.byte 2
+DutyCycles:			.byte 5
 Volumes:			.byte 5
 
+Increments:			.byte 6
+ShiftedIncrementsL:	.byte 6
+ShiftedIncrementsH:	.byte 6
+OctaveValues:		.byte 6
+
 .equ OctaveValueA	= OctaveValues+0
-.equ OctaveValueC	= OctaveValues+1
-.equ OctaveValueE	= OctaveValues+2
-.equ OctaveValueB	= OctaveValues+3
-.equ OctaveValueD	= OctaveValues+4
+.equ OctaveValueB	= OctaveValues+1
+.equ OctaveValueC	= OctaveValues+2
+.equ OctaveValueD	= OctaveValues+3
+.equ OctaveValueE	= OctaveValues+4
 .equ OctaveValueN	= OctaveValues+5
 
-.equ ShiftedCPValueA	= ShiftedCPValues+0
-.equ ShiftedCPValueC	= ShiftedCPValues+1
-.equ ShiftedCPValueE	= ShiftedCPValues+2
-.equ ShiftedCPValueB	= ShiftedCPValues+3
-.equ ShiftedCPValueD	= ShiftedCPValues+4
-.equ ShiftedCPValueN	= ShiftedCPValues+5
+.equ DutyCycleA		= DutyCycles+0
+.equ DutyCycleB		= DutyCycles+1
+.equ DutyCycleC		= DutyCycles+2
+.equ DutyCycleD		= DutyCycles+3
+.equ DutyCycleE		= DutyCycles+4
 
-.equ DutyCycleA			= DutyCycles+0
-.equ ShiftedDutyCycleAL	= ShiftedDutyValues_L+0
-.equ ShiftedDutyCycleAH	= ShiftedDutyValues_H+0
-.equ DutyCycleC			= DutyCycles+1
-.equ ShiftedDutyCycleCL	= ShiftedDutyValues_L+1
-.equ ShiftedDutyCycleCH	= ShiftedDutyValues_H+1
-.equ DutyCycleE			= DutyCycles+2
-.equ ShiftedDutyCycleEL	= ShiftedDutyValues_L+2
-.equ ShiftedDutyCycleEH	= ShiftedDutyValues_H+2
-.equ DutyCycleB			= DutyCycles+3
-.equ ShiftedDutyCycleBL	= ShiftedDutyValues_L+3
-.equ ShiftedDutyCycleBH	= ShiftedDutyValues_H+3
-.equ DutyCycleD			= DutyCycles+4
-.equ ShiftedDutyCycleDL	= ShiftedDutyValues_L+4
-.equ ShiftedDutyCycleDH	= ShiftedDutyValues_H+4
+.equ IncrementA		= Increments+0
+.equ IncrementB		= Increments+1
+.equ IncrementC		= Increments+2
+.equ IncrementD		= Increments+3
+.equ IncrementE		= Increments+4
+.equ IncrementN		= Increments+5
+
+.equ ShiftedIncrementA_L	= ShiftedIncrementsL+0
+.equ ShiftedIncrementB_L	= ShiftedIncrementsL+1
+.equ ShiftedIncrementC_L	= ShiftedIncrementsL+2
+.equ ShiftedIncrementD_L	= ShiftedIncrementsL+3
+.equ ShiftedIncrementE_L	= ShiftedIncrementsL+4
+.equ ShiftedIncrementN_L	= ShiftedIncrementsL+5
+
+.equ ShiftedIncrementA_H	= ShiftedIncrementsH+0
+.equ ShiftedIncrementB_H	= ShiftedIncrementsH+1
+.equ ShiftedIncrementC_H	= ShiftedIncrementsH+2
+.equ ShiftedIncrementD_H	= ShiftedIncrementsH+3
+.equ ShiftedIncrementE_H	= ShiftedIncrementsH+4
+.equ ShiftedIncrementN_H	= ShiftedIncrementsH+5
+
+.equ VolumeA	= Volumes+0
+.equ VolumeB	= Volumes+1
+.equ VolumeC	= Volumes+2
+.equ VolumeD	= Volumes+3
+.equ VolumeE	= Volumes+4
+
+.equ RAMOff		= 0x60
+
+Registers:
+
+	.equ PITCH_LO_A		= 0x00
+	.equ PITCH_LO_B		= 0x01
+	.equ PITCH_LO_C		= 0x02
+	.equ PITCH_LO_D		= 0x03
+	.equ PITCH_LO_E		= 0x04
+	.equ PITCH_LO_N		= 0x05
+
+	.equ PITCH_HI_AB	= 0x06
+	.equ PITCH_HI_CD	= 0x07
+	.equ PITCH_HI_EN	= 0x08
+
+	.equ DUTY_A			= 0x09
+	.equ DUTY_B			= 0x0A
+	.equ DUTY_C			= 0x0B
+	.equ DUTY_D			= 0x0C
+	.equ DUTY_E			= 0x0D
+
+	.equ NOISE_TAP_LO	= 0x0E
+	.equ NOISE_TAP_HI	= 0x0F
+
+	.equ VOLUME_A		= 0x10
+	.equ VOLUME_B		= 0x11
+	.equ VOLUME_C		= 0x12
+	.equ VOLUME_D		= 0x13
+	.equ VOLUME_E		= 0x14
+
+	
+	.equ PITCH_HI_AB_D	= PITCH_HI_AB*2	;
+	.equ PITCH_HI_CD_D	= PITCH_HI_CD*2	;	D stands for Double offset
+	.equ PITCH_HI_EN_D	= PITCH_HI_EN*2	;__
+
 
 .cseg
 
@@ -261,15 +305,13 @@ Init:
 	ldi r26,	0xA5
 	out USIDR,	r26
 
-	movw PHASE_ACC_A_LO, r0
-	; movw PHASE_ACC_B_LO, r0
-	; movw PHASE_ACC_C_LO, r0
-	; movw PHASE_ACC_D_LO, r0
-	; movw PHASE_ACC_E_LO, r0
-	; movw PHASE_ACC_N_LO, r0
+	movw PhaseAccA_L, r0
+	; movw PhaseAccB_L, r0
+	; movw PhaseAccC_L, r0
+	; movw PhaseAccD_L, r0
+	; movw PhaseAccE_L, r0
+	; movw PhaseAccN_L, r0
 
-	ldi r27,	0x08
-	sts ShiftedCPValueA,	r27
 	; all others
 	ldi	r27,	0x04
 	sts OctaveValueA,		r27
@@ -279,8 +321,6 @@ Init:
 
 	ldi r27,	0x80
 	sts	DutyCycleA,			r27
-	sts	ShiftedDutyCycleAL,	r27
-	sts	ShiftedDutyCycleAH,	r0
 
 	sts Increments+0,	r27
 	; all others
@@ -313,7 +353,7 @@ Cycle:
 	brlo L000			;	Get reg number
 	ldi	r18,	0x10	;
 	L000:				;__
-	ldi	YL,		0x60	;
+	ldi	YL,		RAMOff	;
 	add	YL,		r18		;	Get reg number into Y
 	clr	YH				;__
 
@@ -339,25 +379,18 @@ Cycle:
 
 AfterSPI:
 	clr r26
-PhaseAccAUpd0:
 	clr	r3
-	lds	r0,		Increments+0
-	add	PHASE_ACC_A_LO,	r0
-	adc	PHASE_ACC_A_HI,	r3
-	lds	r0,		ShiftedCPValueA
-	cp	PHASE_ACC_A_HI,	r0
-	brlo PhaseAccAUpd1
-		dec	r0
-		and	PHASE_ACC_A_HI,	r0
-PhaseAccAUpd1:
-	lds	r0,		ShiftedDutyCycleAH
-	cp	PHASE_ACC_A_HI,	r0
-	brlo RealEnd
-		lds	r0,		ShiftedDutyCycleAL
-		cp	PHASE_ACC_A_LO,	r0
-		brlo RealEnd
-			lds	r0,		Volumes+0
-			mov r26,	r0
+PhaseAccAUpd0:
+	lds	r0,		ShiftedIncrementA_L	;
+	add	PhaseAccA_L,	r0			;	PhaseAcc += shifted inc value
+	lds r0,		ShiftedIncrementA_H	;
+	adc	PhaseAccA_H,	r0			;__
+
+	lds	r0,		DutyCycleA			;
+	cp	PhaseAccA_H,	r0			;	If > duty cycle, then make it full volume
+	brlo RealEnd					;__
+		lds	r0,		VolumeA
+		mov r26,	r0
 RealEnd:
 	in	r0,		TIFR
 	sbrs r0,	TOV1
@@ -492,122 +525,150 @@ SPITransfer_noOut:	; 21 cycles + 3 (RCALL)
 	in	r18,	USIDR
 ret
 
+.set REG_OFF	= PITCH_LO_A
 PILOX_Routine:
-	std	Y+Increments-0x60,		r1
+	std	Y+IncrementA-RAMOff-REG_OFF,	r1
+	ldd r2,	Y+OctaveValueA-RAMOff-REG_OFF
+	;	r1 = hi, r0 = lo, shifting right
+	clr	r0
+	clc					
+	sbrc r2,	2	;
+	rjmp L00C		;
+		ror r1		;
+		ror r0		;
+		ror r1		;	Shift increment 4 times if needed
+		ror r0		;
+		ror r1		;
+		ror r0		;
+		ror r1		;
+		ror r0		;
+	L00C:			;__
+	sbrc r2,	1	;
+	rjmp L00D		;
+		ror r1		;
+		ror r0		;	Shift increment 2 times if needed
+		ror r1		;
+		ror r0		;__
+	L00D:			;
+	sbrc r2,	0	;
+	rjmp L00E		;	Shift increment once more if needed
+		ror r1		;	
+		ror r0		;__
+	L00E:			;	Store shifted increment
+	std	Y+ShiftedIncrementA_H-RAMOff-REG_OFF,	r1
+	std	Y+ShiftedIncrementA_L-RAMOff-REG_OFF,	r0
 	rjmp AfterSPI
 
+.set REG_OFF	= DUTY_A
+DUTYX_Routine:
 LFSR_Routine:
-	std Y+NoiseXOR-0x60-0x0E,	r1
+	subi YL,	REG_OFF
+	std Y+DutyCycles-RAMOff,	r1
 	rjmp AfterSPI
 
+.set REG_OFF	= PITCH_HI_AB_D
 PHIAB_Routine:
 	; Y has 0x06
-	ldi	ZH,		(ShiftedTable>>7)&0xFF
+	lsl	YL
+	subi YL,	RAMOff
+	; Y now has 0x0C, 0x0E or 0x10, very handy
 	mov	ZL,		r1
 	andi ZL,	0x7
-	ldd	r2,		Y+OctaveValueA-0x60-0x06
+	ldd	r2,		Y+OctaveValueA-RAMOff-REG_OFF
 	cp	r2,		ZL
 	breq L001	; If octave not changed, do nothing
-		std	Y+OctaveValueA-0x60-0x06, ZL			;__	Store octave
+		std	Y+OctaveValueA-RAMOff-REG_OFF, ZL	;__	Store octave
 
-		subi ZL,	0x100-((ShiftedTable<<1)&0xFF)	;
-		lpm r0,		Z								;	Get shifted compare value
-		std	Y+ShiftedCPValueA-0x60-0x06,	r0		;__
-
+		ldd	r2,		Y+IncrementA-RAMOff-REG_OFF	;__	Get raw increment
+		;	r2 = high, r0 = low, shifting right
 		clr	r0
-		clc
-		ldd	r2,		Y+DutyCycleA-0x60-0x06	;
+		clc					
 		sbrc r1,	2	;
 		rjmp L003		;
-			rol r2		;
-			rol r0		;
-			rol r2		;	Shift duty 4 times if needed
-			rol r0		;
-			rol r2		;
-			rol r0		;
-			rol r2		;
-			rol r0		;
+			ror r2		;
+			ror r0		;
+			ror r2		;	Shift increment 4 times if needed
+			ror r0		;
+			ror r2		;
+			ror r0		;
+			ror r2		;
+			ror r0		;
 		L003:			;__
 		sbrc r1,	1	;
 		rjmp L004		;
-			rol r2		;
-			rol r0		;	Shift duty 2 times if needed
-			rol r2		;
-			rol r0		;__
+			ror r2		;
+			ror r0		;	Shift increment 2 times if needed
+			ror r2		;
+			ror r0		;__
 		L004:			;
 		sbrc r1,	0	;
-		rjmp L005		;	Shift duty once more if needed
-			rol r2		;	
-			rol r0		;__
-
-		L005:			; Reset phase accumulator
-		std	Y+ShiftedDutyCycleAL-0x60-0x06,	r2
-		std	Y+ShiftedDutyCycleAH-0x60-0x06,	r0
+		rjmp L005		;	Shift increment once more if needed
+			ror r2		;	
+			ror r0		;__
+		L005:			;	Store shifted increment
+		std	Y+ShiftedIncrementA_H-RAMOff-REG_OFF,	r2
+		std	Y+ShiftedIncrementA_L-RAMOff-REG_OFF,	r0
 		
 	L001:
 	mov	ZL,		r1
-	swap ZL
 	andi ZL,	0x7
-	ldd	r2,		Y+OctaveValueB-0x60-0x06
+	ldd	r2,		Y+OctaveValueB-RAMOff-REG_OFF
 	cp	r2,		ZL
 	breq L002
-		std	Y+OctaveValueB-0x60-0x06, ZL			;__	Store octave
+		std	Y+OctaveValueB-RAMOff-REG_OFF, ZL			;__	Store octave
 
-		subi ZL,	0x100-((ShiftedTable<<1)&0xFF)	;
-		lpm r0,		Z								;	Get shifted compare value
-		std	Y+ShiftedCPValueB-0x60-0x06,	r0		;__
-
+		ldd	r2,		Y+IncrementB-RAMOff-REG_OFF	;__	Get raw increment
+		;	r2 = high, r0 = low, shifting right
 		clr	r0
-		clc
-		ldd	r2,		Y+DutyCycleB-0x60-0x06	;
+		clc	
 		sbrc r1,	6	;
 		rjmp L006		;
-			rol r2		;
-			rol r0		;
-			rol r2		;	Shift duty 4 times if needed
-			rol r0		;
-			rol r2		;
-			rol r0		;
-			rol r2		;
-			rol r0		;
+			ror r2		;
+			ror r0		;
+			ror r2		;	Shift increment 4 times if needed
+			ror r0		;
+			ror r2		;
+			ror r0		;
+			ror r2		;
+			ror r0		;
 		L006:			;__
 		sbrc r1,	5	;
 		rjmp L007		;
-			rol r2		;
-			rol r0		;	Shift duty 2 times if needed
-			rol r2		;
-			rol r0		;__
+			ror r2		;
+			ror r0		;	Shift increment 2 times if needed
+			ror r2		;
+			ror r0		;__
 		L007:			;
 		sbrc r1,	4	;
-		rjmp L008		;	Shift duty once more if needed
-			rol r2		;	
-			rol r0		;__
+		rjmp L008		;	Shift increment once more if needed
+			ror r2		;	
+			ror r0		;__
+		L008:			;	Store shifted increment
+		std	Y+ShiftedIncrementB_H-RAMOff-REG_OFF,	r2
+		std	Y+ShiftedIncrementB_L-RAMOff-REG_OFF,	r0
 
-		L008:
-		std	Y+ShiftedDutyCycleBL-0x60-0x06,	r2
-		std	Y+ShiftedDutyCycleBH-0x60-0x06,	r0
-
-
-	L002:
-	sbrs r1,	3	
-	rjmp L009
-		clr PHASE_ACC_A_LO
-		clr	PHASE_ACC_A_HI	; TODO fix
-	L009:
-	sbrs r1,	7
-	rjmp L00A
-		clr PHASE_ACC_B_LO
-		clr	PHASE_ACC_B_HI
+	L002:				;
+	sbrs r1,	3		;
+	rjmp L009			;	Reset PhaseAcc A if told so
+		clr PhaseAccA_L	;	TODO indexing in some way
+		clr	PhaseAccA_H	;__
+	L009:				;
+	sbrs r1,	7		;
+	rjmp L00A			;	Reset PhaseAcc B if told so
+		clr PhaseAccB_L	;	TODO indexing in some way
+		clr	PhaseAccB_H	;__
 	L00A:
 	rjmp AfterSPI
 
+.set REG_OFF	= VOLUME_A
+
 VOLX_Routine:
-	std Y+Volumes-0x60-0x10,	r1
+	subi YL,	REG_OFF
+	std Y+Volumes-RAMOff,	r1
 	rjmp AfterSPI
 
 PHICD_Routine:
 PHIEN_Routine:
-DUTYX_Routine:
 Dummy_Routine:
 	rjmp AfterSPI
 
@@ -621,7 +682,3 @@ CallTable:
 	.dw LFSR_Routine, LFSR_Routine
 	; 0x10..15
 	.dw VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine
-
-
-ShiftedTable:
-.db 0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01
