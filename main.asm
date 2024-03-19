@@ -63,19 +63,11 @@
 ;	0x0E	| NTPLO	|			Noise LFSR inversion value (low byte)				|
 ;	0x0F	| NTPHI	|			Noise LFSR inversion value (high byte)				|
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;					|		When UseEnvX == 0, Channel X uses static volume			|
+;	0x1n	| VOLX	|						Channel X volume						|	n = 0..4, X = A..E
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1n	| VOLX	|UseEnvX|				Channel X static volume					|	n = 0..4, X = A..E
+;	0x1n	| CFGX	|NoiseEn|EnvEn	|Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;					|	When UseEnvX == 1, Channel X uses an envelope or sample		|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1n	| VOLX	|UseEnvX|Env/Smp| Slot# |
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x15	| MIX0	|NoiEnD	|ToneEnD|NoiEnC	|ToneEnC|NoiEnB	|ToneEnB|NoiEnA	|ToneEnA|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x16	| PANAB	|Right vol ch. B|Left vol ch. B |Right vol ch. A|Left vol ch. A |
-;	0x17	| PANCD	|Right vol ch. D|Left vol ch. D |Right vol ch. C|Left vol ch. C |
-;	0x18	| MXPNE	|Right vol ch. E|Left vol ch. E | ------------	|NoiEnE	|ToneEnE|
+;						envelope load values????
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1D	| EPLA	|				Pitch increment value for envelope A			|
 ;	0x1E	| EPLB	|				Pitch increment value for envelope B			|
@@ -233,6 +225,11 @@ Registers:
 	.equ VOLUME_D		= 0x13
 	.equ VOLUME_E		= 0x14
 
+	.equ CONFIG_A		= 0x15
+	.equ CONFIG_B		= 0x16
+	.equ CONFIG_C		= 0x17
+	.equ CONFIG_D		= 0x18
+	.equ CONFIG_E		= 0x19
 	
 	.equ PITCH_HI_AB_D	= PITCH_HI_AB*2	;
 	.equ PITCH_HI_CD_D	= PITCH_HI_CD*2	;	D stands for Double offset
@@ -380,7 +377,7 @@ Cycle:
 AfterSPI:
 	clr r26
 	clr	r3
-PhaseAccAUpd0:
+PhaseAccChAUpd:
 	lds	r0,		ShiftedIncrementA_L	;
 	add	PhaseAccA_L,	r0			;	PhaseAcc += shifted inc value
 	lds r0,		ShiftedIncrementA_H	;
@@ -388,9 +385,17 @@ PhaseAccAUpd0:
 
 	lds	r0,		DutyCycleA			;
 	cp	PhaseAccA_H,	r0			;	If > duty cycle, then make it full volume
-	brlo RealEnd					;__
+	brsh RealEnd					;__
 		lds	r0,		VolumeA
 		mov r26,	r0
+
+	; todo new alg:
+	; 1. Get noise enable in tmp reg
+	; 2. Mask to correct channel
+	; 3. brsh
+	;	4. Set flag in tmp reg
+	; 5. breq
+	;	6. lds volume
 RealEnd:
 	in	r0,		TIFR
 	sbrs r0,	TOV1
@@ -567,7 +572,7 @@ LFSR_Routine:
 	rjmp AfterSPI
 
 .set REG_OFF	= PITCH_HI_AB_D
-PHIAB_Routine:
+PHIXY_Routine:
 	; Y has 0x06
 	lsl	YL
 	subi YL,	RAMOff
@@ -667,18 +672,19 @@ VOLX_Routine:
 	std Y+Volumes-RAMOff,	r1
 	rjmp AfterSPI
 
-PHICD_Routine:
-PHIEN_Routine:
 Dummy_Routine:
+CFGX_Routine:
 	rjmp AfterSPI
 
 CallTable:
 	; 0x00..05		(Pitch Lo X)
 	.dw PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine
 	; 0x06..08		(Pitch Hi XY)
-	.dw PHIAB_Routine, PHICD_Routine, PHIEN_Routine
+	.dw PHIXY_Routine, PHIXY_Routine, PHIXY_Routine
 	; 0x09..0D		(Duty Cycle X)
 	.dw DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine
 	.dw LFSR_Routine, LFSR_Routine
 	; 0x10..15
 	.dw VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine
+	; 0x16..19
+	.dw CFGX_Routine, CFGX_Routine, CFGX_Routine, CFGX_Routine, CFGX_Routine
