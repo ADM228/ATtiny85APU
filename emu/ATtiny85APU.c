@@ -1,4 +1,8 @@
 #include "ATtiny85APU.h"
+#include <math.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
@@ -6,6 +10,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU_setOutputType(apu, outputType);
 	t85APU_reset(apu);
 	apu->shiftRegister[0] = 0;
+	apu->ticks = 0;
 	return apu;
 }
 
@@ -18,7 +23,8 @@ void t85APU_reset (t85APU * apu) {
 	memset(apu->increments,			0,	sizeof(uint8_t)*6);
 	memset(apu->shiftedIncrements,	0,	sizeof(uint16_t)*6);
 	memset(apu->octaveValues,		0,	sizeof(uint8_t)*6);
-
+	
+	memset(apu->channelOutput,		0,	sizeof(uint8_t)*5);
 	apu->noiseMask = 0;
 
 	apu->clockCycle = 0;	// technically simplified
@@ -66,10 +72,11 @@ uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 	uint16_t out = apu->shiftRegister[0];
 	#if T85APU_SHIFT_REGISTER_SIZE > 1
 	uint16_t buffer[T85APU_SHIFT_REGISTER_SIZE-1];
-	memcpy (buffer, apu->shiftRegister[1], sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
-	memcpy (apu->shiftRegister[0], buffer, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
+	memcpy (buffer, apu->shiftRegister+1, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
+	memcpy (apu->shiftRegister, buffer, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
 	#endif
 	apu->shiftRegister[T85APU_SHIFT_REGISTER_SIZE-1] = newData;
+	return out;
 }
 
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
@@ -78,8 +85,8 @@ void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
 
 void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 	addr &= 0x7F;
+	uint8_t r0, r1 = data, r2, r3, ZL, ZH;
 	switch(addr){
-		uint8_t r0, r1 = data, r2, r3, ZL, ZH;
 		case 0:
 		case 1:
 		case 2:
@@ -168,6 +175,10 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 	}
 }
 
+void t85APU_setQuality (t85APU * apu, uint_fast8_t quality) {
+	apu->quality = quality;
+}
+
 bool t85APU_shiftRegisterPending(t85APU * apu) {
 	return (apu->shiftRegister[0] & 0x8000) ? true : false;
 }
@@ -176,10 +187,52 @@ void t85APU_cycle (t85APU * apu) {
 	uint_fast8_t skipCount = 4;
 	if (apu->shiftRegister[0] & 0x8000) {
 		// TODO handle skip count
-		t85APU_handleReg(apu, (apu->shiftRegister[0] >> 8) & 0xFF, apu->shiftRegister[0] & 0xFF);
+		uint16_t data = t85APU_shiftReg(apu, 0);
+		t85APU_handleReg(apu, (data >> 8) & 0xFF, data & 0xFF);
 	}
 	for (int ch = 0; ch < 5; ch++) {
 		apu->tonePhaseAccs[ch] += apu->shiftedIncrements[ch];
-		apu-> channelOutput[ch] = apu->tonePhaseAccs[ch] >> 8 >= apu->dutyCycles[ch] ? 0 : apu->volumes[ch];
+		apu->channelOutput[ch] = apu->tonePhaseAccs[ch] >> 8 >= apu->dutyCycles[ch] ? 0 : apu->volumes[ch];
 	}
+	apu->nextOutput = apu->channelOutput[0];
+}
+
+void t85APU_tick (t85APU * apu) {
+	static bool outPending;
+	apu->clockCycle++;
+	if (apu->clockCycle >= 512) {
+		apu->clockCycle -= 512;
+		t85APU_cycle(apu);
+		outPending = 1;
+	}
+	if (outPending && apu->clockCycle >= apu->outputDelay) {
+		outPending = 0;
+		apu->currentOutput = apu->nextOutput;
+	}
+}
+
+uint32_t t85APU_calc(t85APU *apu) {
+	apu->ticks += apu->ticksPerClockCycle;
+	uint32_t output;
+	uint32_t * array;
+	size_t totalSize = floor(apu->ticks);
+	if (apu->quality >= 1 && totalSize > 0) array = calloc(totalSize, sizeof(uint32_t)); 
+	for (size_t i = 0; i < totalSize; i++) {
+		t85APU_tick (apu);
+		if (apu->quality >= 1) array[i] = apu->currentOutput;
+	}
+	double totalOutput = 0;
+	switch (apu->quality) {
+		case 1:
+			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)array[i];
+			totalOutput /= (totalSize + 1);
+			output = (uint32_t)totalOutput;
+			break;
+		case 0:
+		default:
+			output = apu->currentOutput;
+			break;
+	}
+	if (apu->quality >= 1 && totalSize > 0) free(array);
+	return output;
 }

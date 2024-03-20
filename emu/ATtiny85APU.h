@@ -47,6 +47,7 @@ typedef struct __ATtiny85APU {
 	uint_fast16_t clockCycle;	// 0..511, on 0 an update is invoked
 	double ticksPerClockCycle;
 	double ticks;	// Reset when updated to keep precision
+	uint_fast8_t quality;	// 0 - no interpolation/alialising, 1 - averaging of outputs per sample
 	
 	// Output
 	uint8_t channelOutput[5];
@@ -61,6 +62,7 @@ void t85APU_reset (t85APU * apu);
 
 void t85APU_setClocknRate (t85APU * apu, double clock, double rate);
 void t85APU_setOutputType (t85APU * apu, uint_fast8_t outputType);
+void t85APU_setQuality	  (t85APU * apu, uint_fast8_t quality);
 
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data);
 
