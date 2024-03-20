@@ -285,7 +285,7 @@ Init:
 	out TIMSK,	r16			;__
 	; Don't reset T1 on CMP match with OCR1C,
 	; Disable T1's PWM A, output nothing from OCR1A,
-	; Enable T1 at the rate of CK/2	(512 cycles)
+	; Enable T1 at the rate of CK (256 cycles)
 	ldi r16,	(0<<CTC1)|(0<<PWM1A)|(0b00<<COM1A0)|(1<<CS10)
 	out TCCR1,	r16			;__
 	; Set Port modes
@@ -390,8 +390,14 @@ PhaseAccChAUpd:
 		mov r26,	r0
 
 	; todo new alg:
-	; 1. Get noise enable in tmp reg
-	; 2. Mask to correct channel
+	; 1. if noise phacc, 
+	;	clr nmask
+	;	Do the LFSR
+	;	brcc
+	;		set bit 7 of nmask
+	; 2. lds cfg
+	; 3. and nmask
+	; 4. tone phacc
 	; 3. brsh
 	;	4. Set flag in tmp reg
 	; 5. breq
