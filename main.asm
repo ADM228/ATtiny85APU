@@ -142,13 +142,15 @@
 .def	PhaseAccE_H	= r13
 .def	PhaseAccN_L	= r14
 .def	PhaseAccN_H	= r15
+.def	NoiseMask	= r20
 
 .dseg
 NoiseLFSR:			.byte 2
 
-NoiseXOR:			.byte 2
 DutyCycles:			.byte 5
+NoiseXOR:			.byte 2
 Volumes:			.byte 5
+ChannelConfigs:		.byte 5
 
 Increments:			.byte 6
 ShiftedIncrementsL:	.byte 6
@@ -194,6 +196,12 @@ OctaveValues:		.byte 6
 .equ VolumeC	= Volumes+2
 .equ VolumeD	= Volumes+3
 .equ VolumeE	= Volumes+4
+
+.equ ChannelConfigA	= ChannelConfigs+0
+.equ ChannelConfigB	= ChannelConfigs+1
+.equ ChannelConfigC	= ChannelConfigs+2
+.equ ChannelConfigD	= ChannelConfigs+3
+.equ ChannelConfigE	= ChannelConfigs+4
 
 .equ RAMOff		= 0x60
 
@@ -252,10 +260,8 @@ Init:
 	.endif
 	ldi	r16,	Low(RAMEND)
 	out	SPL,	r16 ; Init LSB stack pointer
-	ldi	r20,	(1<<PB3)
 	; Set timer 0 freq to max for SPI + SPI settings
 	clr r31
-	clr r19
 	clr r0
 	clr r1
 	clr r3
@@ -303,27 +309,42 @@ Init:
 	out USIDR,	r26
 
 	movw PhaseAccA_L, r0
-	; movw PhaseAccB_L, r0
-	; movw PhaseAccC_L, r0
-	; movw PhaseAccD_L, r0
-	; movw PhaseAccE_L, r0
-	; movw PhaseAccN_L, r0
+	movw PhaseAccB_L, r0
+	movw PhaseAccC_L, r0
+	movw PhaseAccD_L, r0
+	movw PhaseAccE_L, r0
+	movw PhaseAccN_L, r0
 
-	; all others
-	ldi	r27,	0x04
-	sts OctaveValueA,		r27
+	ldi r16,	0x5F
 
-	ldi r27,	0xFF
-	sts	Volumes+0,			r27
+	ldi YL,		0x64
+	clr YH
 
-	ldi r27,	0x80
-	sts	DutyCycleA,			r27
+	Clear5Loop:
+		std Y+DutyCycles-RamOff,	r0
+		std Y+Volumes-RamOff,		r0
+		std	Y+ChannelConfigs-RamOff,r0
+		dec	YL
+		cpse YL,	r16
+		rjmp Clear5Loop
 
-	sts Increments+0,	r27
-	; all others
+	ldi YL,		0x65
 
+	ClearOscLoop:
+		std Y+Volumes-RamOff,			r0
+		std Y+Increments-RamOff,		r0
+		std Y+ShiftedIncrementsL-RamOff,r0
+		std Y+ShiftedIncrementsH-RamOff,r0
+		dec YL
+		cpse YL,	r16
+		rjmp ClearOscLoop
 
-
+	sts	NoiseLFSR+0,	r0
+	sts	NoiseLFSR+1,	r0
+	ldi	r16,	0x24
+	sts	NoiseXOR+0,		r0
+	sts	NoiseXOR+1,		r16
+	clr NoiseMask
 
 	sei
 Forever:
@@ -377,31 +398,47 @@ Cycle:
 AfterSPI:
 	clr r26
 	clr	r3
+PhaseAccNoiseUpd:
+	lds	r0,		ShiftedIncrementN_L	;
+	and PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
+	lds	r0,		ShiftedIncrementN_H	;
+	adc	PhaseAccN_H,	r0			;__
+
+	brcc PhaseAccChAUpd
+		clr	NoiseMask
+		lds	r0,		NoiseLFSR+0		;
+		lds r1,		NoiseLFSR+1		;
+		clc							;	Shift LFSR
+		ror	r1						;
+		ror	r0						;__
+		brcs NoiseLFSRBack			;
+			lds	r2,		NoiseXOR+0	;
+			eor	r0,		r2			;	XOR if needed
+			lds	r2,		NoiseXOR+1	;
+			eor	r1,		r2			;__
+			ldi	NoiseMask,	0x80	;__	Update noise mask
+		NoiseLFSRBack:
+		sts	NoiseLFSR+0,	r0		;	Update the LFSR
+		sts NoiseLFSR+1,	r1		;__
+
 PhaseAccChAUpd:
+	lds	r1,		ChannelConfigA		;	Get noise mask
+	and	r1,		NoiseMask			;__
+
 	lds	r0,		ShiftedIncrementA_L	;
 	add	PhaseAccA_L,	r0			;	PhaseAcc += shifted inc value
 	lds r0,		ShiftedIncrementA_H	;
 	adc	PhaseAccA_H,	r0			;__
 
 	lds	r0,		DutyCycleA			;
-	cp	PhaseAccA_H,	r0			;	If > duty cycle, then make it full volume
-	brsh RealEnd					;__
-		lds	r0,		VolumeA
-		mov r26,	r0
-
-	; todo new alg:
-	; 1. if noise phacc, 
-	;	clr nmask
-	;	Do the LFSR
-	;	brcc
-	;		set bit 7 of nmask
-	; 2. lds cfg
-	; 3. and nmask
-	; 4. tone phacc
-	; 3. brsh
-	;	4. Set flag in tmp reg
-	; 5. breq
-	;	6. lds volume
+	cp	PhaseAccA_H,	r0			;	If > duty cycle, then OR it with the noise
+	brsh PhaseAccChAFin				;__
+		inc	r1						;__
+	PhaseAccChAFin:					;
+	tst r1							;
+	breq RealEnd					;
+		lds	r0,		VolumeA			;
+		mov r26,	r0				;__
 RealEnd:
 	in	r0,		TIFR
 	sbrs r0,	TOV1
@@ -571,8 +608,10 @@ PILOX_Routine:
 	rjmp AfterSPI
 
 .set REG_OFF	= DUTY_A
-DUTYX_Routine:
 LFSR_Routine:
+DUTYX_Routine:
+VOLX_Routine:
+CFGX_Routine:
 	subi YL,	REG_OFF
 	std Y+DutyCycles-RAMOff,	r1
 	rjmp AfterSPI
@@ -673,13 +712,8 @@ PHIXY_Routine:
 
 .set REG_OFF	= VOLUME_A
 
-VOLX_Routine:
-	subi YL,	REG_OFF
-	std Y+Volumes-RAMOff,	r1
-	rjmp AfterSPI
 
 Dummy_Routine:
-CFGX_Routine:
 	rjmp AfterSPI
 
 CallTable:
