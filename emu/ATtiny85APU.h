@@ -2,6 +2,7 @@
 #ifndef __ATTINY85APU_H__
 #define __ATTINY85APU_H__
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -37,6 +38,8 @@ typedef struct __ATtiny85APU {
 
 	// Shift register emulation
 	uint16_t shiftRegister[T85APU_SHIFT_REGISTER_SIZE];
+	size_t shiftRegPtr;
+	bool shiftRegMode;
 
 	// Compile-time options
 	uint_fast8_t outputType;
@@ -48,6 +51,7 @@ typedef struct __ATtiny85APU {
 	double ticksPerClockCycle;
 	double ticks;	// Reset when updated to keep precision
 	uint_fast8_t quality;	// 0 - no interpolation/alialising, 1 - averaging of outputs per sample
+	bool outPending;
 	
 	// Output
 	uint8_t channelOutput[5];

@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define SHIFT_REG 0
+#define STACK_REG 1
+
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
 	t85APU_setClocknRate(apu, clock, rate);
@@ -11,6 +14,9 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU_reset(apu);
 	apu->shiftRegister[0] = 0;
 	apu->ticks = 0;
+	apu->shiftRegMode = STACK_REG;
+	apu->shiftRegPtr = 0;
+	memset(apu->shiftRegister, 0, sizeof(uint16_t)*T85APU_SHIFT_REGISTER_SIZE);
 	return apu;
 }
 
@@ -76,11 +82,16 @@ uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 	memcpy (apu->shiftRegister, buffer, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
 	#endif
 	apu->shiftRegister[T85APU_SHIFT_REGISTER_SIZE-1] = newData;
+	if (apu->shiftRegMode && apu->shiftRegPtr > 0) apu->shiftRegPtr--;
 	return out;
 }
 
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
-	t85APU_shiftReg(apu, (addr << 8) | data | 0x8000);
+	uint16_t shiftRegData = (addr << 8) | data | 0x8000;
+	if (apu->shiftRegMode && apu->shiftRegPtr < T85APU_SHIFT_REGISTER_SIZE)	// == STACK_REG
+		apu->shiftRegister[apu->shiftRegPtr++] = shiftRegData;
+	else
+		t85APU_shiftReg(apu, shiftRegData);
 }
 
 void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
@@ -121,14 +132,14 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 			if (apu->octaveValues[addr] != ZL) {
 				apu->octaveValues[addr] = ZL;
 				r2 = apu->increments[addr];
-				uint16_t shiftedData = r2 << (1+(r2 & 0x07));
+				uint16_t shiftedData = r2 << (1+ZL);
 				apu->shiftedIncrements[addr] = shiftedData;
 			}
 			ZL = (data >> 4) & 0x07;
 			if (apu->octaveValues[addr+1] != ZL) {
 				apu->octaveValues[addr+1] = ZL;
 				r2 = apu->increments[addr+1];
-				uint16_t shiftedData = r2 << (1+(r2 & 0x07));
+				uint16_t shiftedData = r2 << (1+ZL);
 				apu->shiftedIncrements[addr+1] = shiftedData;
 			}
 			if (r1 & 1<<3)	apu->tonePhaseAccs[addr] = 0;
@@ -198,15 +209,14 @@ void t85APU_cycle (t85APU * apu) {
 }
 
 void t85APU_tick (t85APU * apu) {
-	static bool outPending;
 	apu->clockCycle++;
 	if (apu->clockCycle >= 512) {
 		apu->clockCycle -= 512;
 		t85APU_cycle(apu);
-		outPending = 1;
+		apu->outPending = 1;
 	}
-	if (outPending && apu->clockCycle >= apu->outputDelay) {
-		outPending = 0;
+	if (apu->outPending && apu->clockCycle >= apu->outputDelay) {
+		apu->outPending = 0;
 		apu->currentOutput = apu->nextOutput;
 	}
 }
