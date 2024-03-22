@@ -11,6 +11,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
 	t85APU_setClocknRate(apu, clock, rate);
 	t85APU_setOutputType(apu, outputType);
+	t85APU_setQuality(apu, apu->ticksPerClockCycle == 512.0 ? 0 : 1);
 	t85APU_reset(apu);
 	apu->shiftRegister[0] = 0;
 	apu->ticks = 0;
@@ -229,9 +230,10 @@ uint32_t t85APU_calc(t85APU *apu) {
 	if (apu->quality >= 1 && totalSize > 0) array = calloc(totalSize, sizeof(uint32_t)); 
 	for (size_t i = 0; i < totalSize; i++) {
 		t85APU_tick (apu);
-		if (apu->quality >= 1) array[i] = apu->currentOutput;
+		if (apu->quality >= 1 && totalSize > 0) array[i] = apu->currentOutput;
 	}
 	double totalOutput = 0;
+	apu->ticks -= floor(apu->ticks);
 	switch (apu->quality) {
 		case 1:
 			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)array[i];
