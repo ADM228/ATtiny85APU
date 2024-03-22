@@ -19,9 +19,10 @@ typedef struct __ATtiny85APU {
 	// Replica of internal RAM
 	uint16_t noiseLFSR;
 
-	uint16_t noiseXOR;
 	uint8_t dutyCycles[5];
+	uint16_t noiseXOR;
 	uint8_t volumes[5];
+	uint8_t channelConfigs[5];
 
 	uint8_t increments[6];
 	uint16_t shiftedIncrements[6];	// This is simplified

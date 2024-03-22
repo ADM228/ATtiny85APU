@@ -331,10 +331,10 @@ Init:
 	ldi YL,		0x65
 
 	ClearOscLoop:
-		std Y+Volumes-RamOff,			r0
 		std Y+Increments-RamOff,		r0
 		std Y+ShiftedIncrementsL-RamOff,r0
 		std Y+ShiftedIncrementsH-RamOff,r0
+		std Y+OctaveValues-RamOff,		r0
 		dec YL
 		cpse YL,	r16
 		rjmp ClearOscLoop

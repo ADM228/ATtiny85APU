@@ -22,10 +22,11 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 }
 
 void t85APU_reset (t85APU * apu) {
-	memset(apu->tonePhaseAccs, 	0, 	sizeof(uint16_t)*(5+1+2+2));
-
 	memset(apu->dutyCycles,		0,	sizeof(uint8_t)*5);
 	memset(apu->volumes,		0,	sizeof(uint8_t)*5);
+	memset(apu->channelConfigs,	0,	sizeof(uint8_t)*5);
+
+	memset(apu->tonePhaseAccs, 	0, 	sizeof(uint16_t)*(5+1+2+2));
 
 	memset(apu->increments,			0,	sizeof(uint8_t)*6);
 	memset(apu->shiftedIncrements,	0,	sizeof(uint16_t)*6);
@@ -34,10 +35,10 @@ void t85APU_reset (t85APU * apu) {
 	memset(apu->channelOutput,		0,	sizeof(uint8_t)*5);
 	apu->noiseMask = 0;
 
-	apu->clockCycle = 0;	// technically simplified
+	apu->clockCycle = 511;	// technically simplified
 
 	apu->noiseXOR	= 0x2400;
-	apu->noiseLFSR	= 1;
+	apu->noiseLFSR	= 0;
 	
 }
 
@@ -182,6 +183,7 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 		case 24:
 		case 25:
 			// Channel settings
+			apu->channelConfigs[addr-21] = data;
 		default:
 			break;
 	}
@@ -202,9 +204,18 @@ void t85APU_cycle (t85APU * apu) {
 		uint16_t data = t85APU_shiftReg(apu, 0);
 		t85APU_handleReg(apu, (data >> 8) & 0xFF, data & 0xFF);
 	}
+	apu->noisePhaseAcc += apu->shiftedIncrements[5];
+	if (apu->noisePhaseAcc < apu->shiftedIncrements[5])	{	// If overflowed
+		bool carry = apu->noiseLFSR & 1;
+		apu->noiseMask = carry ? 0 : 0x80;
+		apu->noiseLFSR >>= 1;
+		if (!carry) apu->noiseLFSR ^= apu->noiseXOR;
+	}
 	for (int ch = 0; ch < 5; ch++) {
+		uint8_t r1 = apu->channelConfigs[ch] & apu->noiseMask;
 		apu->tonePhaseAccs[ch] += apu->shiftedIncrements[ch];
-		apu->channelOutput[ch] = apu->tonePhaseAccs[ch] >> 8 >= apu->dutyCycles[ch] ? 0 : apu->volumes[ch];
+		if (apu->tonePhaseAccs[ch] >> 8 < apu->dutyCycles[ch]) r1++;	// really another bit set
+		apu->channelOutput[ch] = r1 ? apu->volumes[ch] : 0;
 	}
 	apu->nextOutput = apu->channelOutput[0];
 }

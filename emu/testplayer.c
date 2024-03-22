@@ -23,13 +23,16 @@ void writeShit() {
 }
 
 int main () {
-    apu = t85APU_new(8000000, 48000, T85APU_OUTPUT_PB4);
+    apu = t85APU_new(8000000, 44100, T85APU_OUTPUT_PB4);
     t85APU_setQuality(apu, 1);
 
     file = fopen("test.raw", "wb");
 
     t85APU_writeReg(apu, 0x06, 0x0B);
     t85APU_writeReg(apu, 0x09, 0x20);
+    t85APU_writeReg(apu, 0x15, 0x80);
+    t85APU_writeReg(apu, 0x05, 0xFF);
+    t85APU_writeReg(apu, 0x08, 0xF0);
 
     uint32_t output;
 
