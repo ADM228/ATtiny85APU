@@ -441,11 +441,16 @@ PhaseAccChAUpd:
 		mov r26,	r0				;__
 RealEnd:
 	in	r0,		TIFR
-	sbrs r0,	TOV1
+	bst	r0,		TOV1
+	brtc Delay
+	ldi r16,	1<<TOV1	;	Acknowledge second interrupt
+	out TIFR,	r16		;__
 	reti
 Delay:
 	in	r0,		TCNT1
 	com	r0
+	lsr r0
+	breq RealEnd
 	L00B:
 		dec	r0
 		brne L00B
