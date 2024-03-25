@@ -353,18 +353,15 @@ Forever:
 Cycle:
 	out	OCR1B,	r26		; Update sound
 
+	cbi	PortB,	PB3
+
 	sbis PINB,	PINB0	; If no input pending, skip this
 	rjmp AfterSPI
 
 	clr	r3
 
-	cbi	PortB,	PB3
-
-	; Copied directly from Microchip's docs
-
 	mov	r18,	r26
 	rcall	SPITransfer
-
 
 	andi r18,	0x7F	;
 	cpi	r18,	0x16	;
@@ -390,12 +387,10 @@ Cycle:
 
 	mov	r1,		r18		;__	Reg 1 has data
 
-	sbi PortB,	PB3		;	Latch the '595
-	cbi	PortB, 	PB3		;__
-
 	ijmp
 
 AfterSPI:
+	sbi PortB,	PB3
 	clr r26
 	clr	r3
 PhaseAccNoiseUpd:

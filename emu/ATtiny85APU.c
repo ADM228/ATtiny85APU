@@ -7,6 +7,8 @@
 #define SHIFT_REG 0
 #define STACK_REG 1
 
+#define member_sizeof(type, member) sizeof(((type *)0)->member)
+
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
 	t85APU_setClocknRate(apu, clock, rate);
