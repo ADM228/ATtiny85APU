@@ -71,7 +71,7 @@
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1D	| EPLA	|				Pitch increment value for envelope A			|
 ;	0x1E	| EPLB	|				Pitch increment value for envelope B			|
-;	0x1F	| EPH	|EnvB PR| Envelope B octave num |EnvA PR| Envelope A octave num |
+;	0x1F	| EPH	|		Envelope B octave num	|		Envelope A octave num	|
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x20	| SPLA	|					Low byte of sample A pointer				|	
 ;	0x21	| SPLB	|					Low byte of sample B pointer				|
@@ -142,54 +142,34 @@
 .def	PhaseAccE_H	= r13
 .def	PhaseAccN_L	= r14
 .def	PhaseAccN_H	= r15
-.def	NoiseMask	= r20
+
+.def	EnvAVolume	= r20
+.def	EnvBVolume	= r21
+.def	SmpAVolume	= r22
+.def	SmpBVolume	= r23
+
+.def	NoiseMask	= r24
 
 .dseg
 NoiseLFSR:			.byte 2
+EnvPhaseAccs:		.byte 4
+SmpPhaseAccs:		.byte 4
 
 DutyCycles:			.byte 5
 NoiseXOR:			.byte 2
 Volumes:			.byte 5
 ChannelConfigs:		.byte 5
 
-Increments:			.byte 6
-ShiftedIncrementsL:	.byte 6
-ShiftedIncrementsH:	.byte 6
-OctaveValues:		.byte 6
-
-.equ OctaveValueA	= OctaveValues+0
-.equ OctaveValueB	= OctaveValues+1
-.equ OctaveValueC	= OctaveValues+2
-.equ OctaveValueD	= OctaveValues+3
-.equ OctaveValueE	= OctaveValues+4
-.equ OctaveValueN	= OctaveValues+5
+Increments:			.byte 8
+ShiftedIncrementsL:	.byte 8
+ShiftedIncrementsH:	.byte 8
+OctaveValues:		.byte 7
 
 .equ DutyCycleA		= DutyCycles+0
 .equ DutyCycleB		= DutyCycles+1
 .equ DutyCycleC		= DutyCycles+2
 .equ DutyCycleD		= DutyCycles+3
 .equ DutyCycleE		= DutyCycles+4
-
-.equ IncrementA		= Increments+0
-.equ IncrementB		= Increments+1
-.equ IncrementC		= Increments+2
-.equ IncrementD		= Increments+3
-.equ IncrementE		= Increments+4
-.equ IncrementN		= Increments+5
-
-.equ ShiftedIncrementA_L	= ShiftedIncrementsL+0
-.equ ShiftedIncrementB_L	= ShiftedIncrementsL+1
-.equ ShiftedIncrementC_L	= ShiftedIncrementsL+2
-.equ ShiftedIncrementD_L	= ShiftedIncrementsL+3
-.equ ShiftedIncrementE_L	= ShiftedIncrementsL+4
-.equ ShiftedIncrementN_L	= ShiftedIncrementsL+5
-
-.equ ShiftedIncrementA_H	= ShiftedIncrementsH+0
-.equ ShiftedIncrementB_H	= ShiftedIncrementsH+1
-.equ ShiftedIncrementC_H	= ShiftedIncrementsH+2
-.equ ShiftedIncrementD_H	= ShiftedIncrementsH+3
-.equ ShiftedIncrementE_H	= ShiftedIncrementsH+4
-.equ ShiftedIncrementN_H	= ShiftedIncrementsH+5
 
 .equ VolumeA	= Volumes+0
 .equ VolumeB	= Volumes+1
@@ -202,6 +182,41 @@ OctaveValues:		.byte 6
 .equ ChannelConfigC	= ChannelConfigs+2
 .equ ChannelConfigD	= ChannelConfigs+3
 .equ ChannelConfigE	= ChannelConfigs+4
+
+.equ OctaveValueA	= OctaveValues+0
+.equ OctaveValueB	= OctaveValues+1
+.equ OctaveValueC	= OctaveValues+2
+.equ OctaveValueD	= OctaveValues+3
+.equ OctaveValueE	= OctaveValues+4
+.equ OctaveValueN	= OctaveValues+5
+.equ OctaveValueEnv	= OctaveValues+6
+
+.equ IncrementA		= Increments+0
+.equ IncrementB		= Increments+1
+.equ IncrementC		= Increments+2
+.equ IncrementD		= Increments+3
+.equ IncrementE		= Increments+4
+.equ IncrementN		= Increments+5
+.equ IncrementEA	= Increments+6
+.equ IncrementEB	= Increments+7
+
+.equ ShiftedIncrementA_L	= ShiftedIncrementsL+0
+.equ ShiftedIncrementB_L	= ShiftedIncrementsL+1
+.equ ShiftedIncrementC_L	= ShiftedIncrementsL+2
+.equ ShiftedIncrementD_L	= ShiftedIncrementsL+3
+.equ ShiftedIncrementE_L	= ShiftedIncrementsL+4
+.equ ShiftedIncrementN_L	= ShiftedIncrementsL+5
+.equ ShiftedIncrementEA_L	= ShiftedIncrementsL+6
+.equ ShiftedIncrementEB_L	= ShiftedIncrementsL+7
+
+.equ ShiftedIncrementA_H	= ShiftedIncrementsH+0
+.equ ShiftedIncrementB_H	= ShiftedIncrementsH+1
+.equ ShiftedIncrementC_H	= ShiftedIncrementsH+2
+.equ ShiftedIncrementD_H	= ShiftedIncrementsH+3
+.equ ShiftedIncrementE_H	= ShiftedIncrementsH+4
+.equ ShiftedIncrementN_H	= ShiftedIncrementsH+5
+.equ ShiftedIncrementEA_H	= ShiftedIncrementsH+6
+.equ ShiftedIncrementEB_H	= ShiftedIncrementsH+7
 
 .equ RAMOff		= 0x60
 
@@ -308,12 +323,14 @@ Init:
 	ldi r26,	0xA5
 	out USIDR,	r26
 
-	movw PhaseAccA_L, r0
-	movw PhaseAccB_L, r0
-	movw PhaseAccC_L, r0
-	movw PhaseAccD_L, r0
-	movw PhaseAccE_L, r0
-	movw PhaseAccN_L, r0
+	movw PhaseAccA_L, 	r0
+	movw PhaseAccB_L, 	r0
+	movw PhaseAccC_L, 	r0
+	movw PhaseAccD_L, 	r0
+	movw PhaseAccE_L, 	r0
+	movw PhaseAccN_L, 	r0
+	movw EnvAVolume,	r0
+	movw SmpAVolume,	r0
 
 	ldi r16,	0x5F
 
@@ -328,7 +345,7 @@ Init:
 		cpse YL,	r16
 		rjmp Clear5Loop
 
-	ldi YL,		0x65
+	ldi YL,		0x67
 
 	ClearOscLoop:
 		std Y+Increments-RamOff,		r0
@@ -393,6 +410,14 @@ AfterSPI:
 	sbi PortB,	PB3
 	clr r26
 	clr	r3
+PhaseAccEnvAUpd:
+	; basic shit to do:
+	; skip if inc == 0
+	; lds env octave (only once)
+	; if octave MSB set, add to high and mid bytes
+	; else add to mid and low bytes
+	; inc env pos by high byte
+	; set corresponding volumes
 PhaseAccNoiseUpd:
 	lds	r0,		ShiftedIncrementN_L	;
 	and PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
