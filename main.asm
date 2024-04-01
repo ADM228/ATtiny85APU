@@ -389,15 +389,10 @@ Cycle:
 	add	YL,		r18		;	Get reg number into Y
 	clr	YH				;__
 
-	ldi	ZH,		(CallTable>>7)&0xFF
-	ldi	ZL,		((CallTable<<1)&0xFF)	
-	add ZL,		r18		;
-	adc	ZH,		YH		;
-	add	ZL,		r18		;
-	adc	ZH,		YH		;
-	lpm	r0,		Z+		;	Get IJMP pointer into Z
-	lpm	r1,		Z+		;
-	movw ZL,	r0		;__
+	ldi	ZH,		(CallTable>>8)&0xFF
+	ldi	ZL,		(CallTable&0xFF)	
+	add ZL,		r18		;	Get IJMP pointer into Z
+	adc	ZH,		YH		;__
 
 	out	USIDR,	ZL
 	rcall 	SPITransfer_noOut
@@ -743,13 +738,33 @@ Dummy_Routine:
 
 CallTable:
 	; 0x00..05		(Pitch Lo X)
-	.dw PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine, PILOX_Routine
+	rjmp PILOX_Routine
+	rjmp PILOX_Routine
+	rjmp PILOX_Routine
+	rjmp PILOX_Routine
+	rjmp PILOX_Routine
+	rjmp PILOX_Routine
 	; 0x06..08		(Pitch Hi XY)
-	.dw PHIXY_Routine, PHIXY_Routine, PHIXY_Routine
+	rjmp PHIXY_Routine
+	rjmp PHIXY_Routine
+	rjmp PHIXY_Routine
 	; 0x09..0D		(Duty Cycle X)
-	.dw DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine, DUTYX_Routine
-	.dw LFSR_Routine, LFSR_Routine
+	rjmp DUTYX_Routine
+	rjmp DUTYX_Routine
+	rjmp DUTYX_Routine
+	rjmp DUTYX_Routine
+	rjmp DUTYX_Routine
+	rjmp LFSR_Routine
+	rjmp LFSR_Routine
 	; 0x10..15
-	.dw VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine, VOLX_Routine
+	rjmp VOLX_Routine
+	rjmp VOLX_Routine
+	rjmp VOLX_Routine
+	rjmp VOLX_Routine
+	rjmp VOLX_Routine
 	; 0x16..19
-	.dw CFGX_Routine, CFGX_Routine, CFGX_Routine, CFGX_Routine, CFGX_Routine
+	rjmp CFGX_Routine
+	rjmp CFGX_Routine
+	rjmp CFGX_Routine
+	rjmp CFGX_Routine
+	rjmp CFGX_Routine
