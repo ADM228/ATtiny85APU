@@ -65,9 +65,12 @@
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1n	| VOLX	|						Channel X volume						|	n = 0..4, X = A..E
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1n	| CFGX	|NoiseEn|EnvEn	|Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
+;	0x1n	| CFGX	|NoiseEn| EnvEn |Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;						envelope load values????
+;	0x1A	| ELLO	|		Low byte of envelope phase load value			|EnvNum |
+;	0x1B	| ELHI	|			High byte of envelope phase load value				|
+;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;	0x1C	| ESHP	|EnvB PR|	Envelope B shape	|EnvA PR|	Envelope A shape	|
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1D	| EPLA	|				Pitch increment value for envelope A			|
 ;	0x1E	| EPLB	|				Pitch increment value for envelope B			|
@@ -149,11 +152,23 @@
 .def	SmpBVolume	= r23
 
 .def	NoiseMask	= r24
+.def	EnvZeroFlg	= r25
+.def	LOut_L		= r26
+.def	LOut_H		= r27
+
+.equ	EnvAZero	= 0
+.equ	EnvBZero	= 1
+.equ	SmpAZero	= 2
+.equ	SmpBZero	= 3
+.equ	EnvASlope	= 4
+.equ	EnvBSlope	= 5
 
 .dseg
 NoiseLFSR:			.byte 2
 EnvPhaseAccs:		.byte 4
 SmpPhaseAccs:		.byte 4
+EnvStates:			.byte 2
+EnvShape:			.byte 1
 
 DutyCycles:			.byte 5
 NoiseXOR:			.byte 2
@@ -164,6 +179,19 @@ Increments:			.byte 8
 ShiftedIncrementsL:	.byte 8
 ShiftedIncrementsH:	.byte 8
 OctaveValues:		.byte 7
+
+.equ PhaseAccEnvA_L	= EnvPhaseAccs+0
+.equ PhaseAccEnvA_H	= EnvPhaseAccs+1
+.equ PhaseAccEnvB_L	= EnvPhaseAccs+2
+.equ PhaseAccEnvB_H	= EnvPhaseAccs+3
+
+.equ PhaseAccSmpA_L	= SmpPhaseAccs+0
+.equ PhaseAccSmpA_H	= SmpPhaseAccs+1
+.equ PhaseAccSmpB_L	= SmpPhaseAccs+2
+.equ PhaseAccSmpB_H	= SmpPhaseAccs+3
+
+.equ EnvStateA		= EnvStates+0
+.equ EnvStateB		= EnvStates+1
 
 .equ DutyCycleA		= DutyCycles+0
 .equ DutyCycleB		= DutyCycles+1
@@ -182,14 +210,6 @@ OctaveValues:		.byte 7
 .equ ChannelConfigC	= ChannelConfigs+2
 .equ ChannelConfigD	= ChannelConfigs+3
 .equ ChannelConfigE	= ChannelConfigs+4
-
-.equ OctaveValueA	= OctaveValues+0
-.equ OctaveValueB	= OctaveValues+1
-.equ OctaveValueC	= OctaveValues+2
-.equ OctaveValueD	= OctaveValues+3
-.equ OctaveValueE	= OctaveValues+4
-.equ OctaveValueN	= OctaveValues+5
-.equ OctaveValueEnv	= OctaveValues+6
 
 .equ IncrementA		= Increments+0
 .equ IncrementB		= Increments+1
@@ -217,6 +237,14 @@ OctaveValues:		.byte 7
 .equ ShiftedIncrementN_H	= ShiftedIncrementsH+5
 .equ ShiftedIncrementEA_H	= ShiftedIncrementsH+6
 .equ ShiftedIncrementEB_H	= ShiftedIncrementsH+7
+
+.equ OctaveValueA	= OctaveValues+0
+.equ OctaveValueB	= OctaveValues+1
+.equ OctaveValueC	= OctaveValues+2
+.equ OctaveValueD	= OctaveValues+3
+.equ OctaveValueE	= OctaveValues+4
+.equ OctaveValueN	= OctaveValues+5
+.equ OctaveValueEnv	= OctaveValues+6
 
 .equ RAMOff		= 0x60
 
@@ -253,10 +281,25 @@ Registers:
 	.equ CONFIG_C		= 0x17
 	.equ CONFIG_D		= 0x18
 	.equ CONFIG_E		= 0x19
+
+	.equ ENVELOPE_LD_LO	= 0x1A
+	.equ ENVELOPE_LD_HI	= 0x1B
+	.equ ENVELOPE_SHAPE	= 0x1C
+
+	.equ PITCH_LO_ENV_A	= 0x1D
+	.equ PITCH_LO_ENV_B	= 0x1E
+	.equ PITCH_HI_ENV	= 0x1F
 	
 	.equ PITCH_HI_AB_D	= PITCH_HI_AB*2	;
 	.equ PITCH_HI_CD_D	= PITCH_HI_CD*2	;	D stands for Double offset
 	.equ PITCH_HI_EN_D	= PITCH_HI_EN*2	;__
+
+	.equ ENV_A_HOLD	= 0
+	.equ ENV_A_ALT	= 1
+	.equ ENV_A_ATT	= 2
+	.equ ENV_B_HOLD	= 4
+	.equ ENV_B_ALT	= 5
+	.equ ENV_B_ATT	= 6
 
 
 .cseg
@@ -404,15 +447,61 @@ Cycle:
 AfterSPI:
 	sbi PortB,	PB3
 	clr r26
-	clr	r3
-PhaseAccEnvAUpd:
-	; basic shit to do:
-	; skip if inc == 0
+PhaseAccEnvUpd:
+	; UP TO 46 CYCLES AAAAAAAAAAAAAAAAAAAA
 	; lds env octave (only once)
-	; if octave MSB set, add to high and mid bytes
-	; else add to mid and low bytes
-	; inc env pos by high byte
-	; set corresponding volumes
+	lds	r18,	OctaveValueEnv
+	lds	r19,	EnvShape
+	; skip if inc == 0
+	bst	EnvZeroFlg,	EnvAZero
+	brts PhaseAccNoiseUpd
+	PhaseAccEnvAUpd:
+		lds	r0,		ShiftedIncrementEA_L
+		; if octave MSB set, add to high and mid bytes
+		clr	r3
+		bst	r18,	3
+		brtc PhaseAccEnvAUpd_MidLo
+	PhaseAccEnvAUpd_MidHi:
+		lds	r1,		PhaseAccEnvA_H
+		add	r1,		r0
+		sts	PhaseAccEnvA_H,	r1
+		lds	r0,		ShiftedIncrementEA_H
+		adc	r3,		r0
+		rjmp PhaseAccEnvAUpd_ValueUpdate
+	PhaseAccEnvAUpd_MidLo:
+		; else add to mid and low bytes
+		lds	r1,		PhaseAccEnvA_L
+		add	r1,		r0
+		sts	PhaseAccEnvA_L,	r1
+		lds	r0,		ShiftedIncrementEA_H
+		lds	r1,		PhaseAccEnvA_H
+		adc	r1,		r0
+		sts	PhaseAccEnvA_H,	r1
+		adc	r3,		r3	; r3 is 0, therefore r3 becomes carry
+	PhaseAccEnvAUpd_ValueUpdate:
+		breq PhaseAccEnvAUpd_End	; Z flag set by the last adc with r3
+		; inc env pos by high byte
+		lds	EnvAVolume,	EnvStateA
+		add	EnvAVolume,	r3
+		sts	EnvStateA,	EnvAVolume	; doesn't affect carry
+		rol	r3	;	stores carry for later
+		sbrs EnvZeroFlg, EnvASlope
+			com	EnvAVolume
+		bst	r3,		7
+		brtc PhaseAccEnvAUpd_End
+	PhaseAccEnvAUpd_Overflow:
+		bst r19,	ENV_A_ALT
+		brtc L00F
+			ldi	r16,	1<<EnvASlope	;	Invert slope
+			eor	EnvZeroFlg,	r16			;__
+		L00F:
+		bst r19,	ENV_A_HOLD
+		brtc PhaseAccEnvAUpd_End
+			clr	EnvAVolume
+			sbrs EnvZeroFlg, EnvASlope
+				dec	EnvAVolume
+			sbr	EnvZeroFlg,	EnvAZero
+	PhaseAccEnvAUpd_End:
 PhaseAccNoiseUpd:
 	lds	r0,		ShiftedIncrementN_L	;
 	add PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
