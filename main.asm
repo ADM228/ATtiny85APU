@@ -681,6 +681,7 @@ PHIXY_Routine:
 		
 	L001:
 	mov	ZL,		r1
+	swap ZL
 	andi ZL,	0x7
 	ldd	r2,		Y+OctaveValueB-RAMOff-REG_OFF
 	cp	r2,		ZL
