@@ -415,7 +415,7 @@ PhaseAccEnvAUpd:
 	; set corresponding volumes
 PhaseAccNoiseUpd:
 	lds	r0,		ShiftedIncrementN_L	;
-	and PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
+	add PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
 	lds	r0,		ShiftedIncrementN_H	;
 	adc	PhaseAccN_H,	r0			;__
 
