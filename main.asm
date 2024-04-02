@@ -402,12 +402,28 @@ Init:
 		cpse YL,	r16
 		rjmp ClearOscLoop
 
+	ldi YL,		0x61
+	
+	ClearEnvLoop:
+		std	Y+EnvPhaseAccs-RamOff,		r0
+		std	Y+EnvPhaseAccs+2-RamOff,	r0
+		std	Y+SmpPhaseAccs-RamOff,		r0
+		std	Y+SmpPhaseAccs+2-RamOff,	r0
+		std Y+EnvStates-RamOff,			r0
+		std Y+EnvLdBuffer-RamOff,		r0
+		dec	YL
+		cpse YL,	r16
+		rjmp ClearEnvLoop
+
 	sts	NoiseLFSR+0,	r0
 	sts	NoiseLFSR+1,	r0
 	ldi	r16,	0x24
 	sts	NoiseXOR+0,		r0
 	sts	NoiseXOR+1,		r16
 	clr NoiseMask
+
+	sts EnvShape,		r0
+	ldi	EnvZeroFlg,		1<<EnvAZero|1<<EnvBZero|1<<SmpAZero|1<<SmpBZero
 
 	sei
 Forever:
@@ -511,7 +527,7 @@ PhaseAccEnvUpd:
 		lds	r0,		ShiftedIncrementEB_L
 		; if octave MSB set, add to high and mid bytes
 		clr	r3
-		bst	r18,	3
+		bst	r18,	7
 		brtc PhaseAccEnvBUpd_MidLo
 	PhaseAccEnvBUpd_MidHi:
 		lds	r1,		PhaseAccEnvB_H
@@ -882,15 +898,17 @@ ESHP_RegHndl:
 	lds	r3,		EnvLdBuffer+1
 	bst	r1,		ENV_A_RST
 	brtc L011
-		sts	EnvStateA,	r0
-		sts	PhaseAccEnvA_L,	r2
-		sts	PhaseAccEnvA_H,	r3
+		sts	EnvStateA,	r3
+		sts	PhaseAccEnvA_L,	r0
+		sts	PhaseAccEnvA_H,	r2
+		cbr	EnvZeroFlg,	EnvAZero
 	L011:
 	bst	r1,		ENV_B_RST
 	brtc L012
-		sts	EnvStateB,	r0
-		sts	PhaseAccEnvB_L,	r2
-		sts	PhaseAccEnvB_H,	r3
+		sts	EnvStateB,	r3
+		sts	PhaseAccEnvB_L,	r0
+		sts	PhaseAccEnvB_H,	r2
+		cbr	EnvZeroFlg,	EnvBZero
 	L012:
 	sts	EnvShape,	r1
 	rjmp AfterSPI

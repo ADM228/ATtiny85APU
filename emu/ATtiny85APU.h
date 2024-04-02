@@ -18,24 +18,31 @@ extern "C"
 typedef struct __ATtiny85APU {
 	// Replica of internal RAM
 	uint16_t noiseLFSR;
+	uint16_t envPhaseAccs[2];
+	uint16_t smpPhaseAccs[2];
+	uint8_t envStates[2];
+	uint8_t envShape;
 
 	uint8_t dutyCycles[5];
 	uint16_t noiseXOR;
 	uint8_t volumes[5];
 	uint8_t channelConfigs[5];
+	uint16_t envLdBuffer;
 
-	uint8_t increments[6];
-	uint16_t shiftedIncrements[6];	// This is simplified
-	uint8_t octaveValues[6];
+	uint8_t increments[8];
+	uint16_t shiftedIncrements[8];	// This is simplified
+	uint8_t octaveValues[7];
 
 	// Replica of registers
 	// Phase accumulators
 	uint16_t tonePhaseAccs[5];
 	uint16_t noisePhaseAcc;
-	uint16_t envPhaseAccs[2];
-	uint16_t smpPhaseAccs[2];
+
+	uint8_t envVolume[2];
+	uint8_t smpVolume[2];
 
 	uint8_t noiseMask;
+	uint8_t envZeroFlg;
 
 	// Shift register emulation
 	uint16_t shiftRegister[T85APU_SHIFT_REGISTER_SIZE];
