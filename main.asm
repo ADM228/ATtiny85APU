@@ -67,7 +67,7 @@
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1n	| CFGX	|NoiseEn| EnvEn |Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1A	| ELLO	|		Low byte of envelope phase load value			|EnvNum |
+;	0x1A	| ELLO	|			Low byte of envelope phase load value				|
 ;	0x1B	| ELHI	|			High byte of envelope phase load value				|
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
 ;	0x1C	| ESHP	|EnvB PR|	Envelope B shape	|EnvA PR|	Envelope A shape	|
@@ -174,6 +174,7 @@ DutyCycles:			.byte 5
 NoiseXOR:			.byte 2
 Volumes:			.byte 5
 ChannelConfigs:		.byte 5
+EnvLdBuffer:		.byte 2
 
 Increments:			.byte 8
 ShiftedIncrementsL:	.byte 8
@@ -297,9 +298,11 @@ Registers:
 	.equ ENV_A_HOLD	= 0
 	.equ ENV_A_ALT	= 1
 	.equ ENV_A_ATT	= 2
+	.equ ENV_A_RST	= 3
 	.equ ENV_B_HOLD	= 4
 	.equ ENV_B_ALT	= 5
 	.equ ENV_B_ATT	= 6
+	.equ ENV_B_RST	= 7
 
 
 .cseg
@@ -454,7 +457,7 @@ PhaseAccEnvUpd:
 	lds	r19,	EnvShape
 	; skip if inc == 0
 	bst	EnvZeroFlg,	EnvAZero
-	brts PhaseAccNoiseUpd
+	brts PhaseAccEnvAUpd_End
 	PhaseAccEnvAUpd:
 		lds	r0,		ShiftedIncrementEA_L
 		; if octave MSB set, add to high and mid bytes
@@ -502,6 +505,55 @@ PhaseAccEnvUpd:
 				dec	EnvAVolume
 			sbr	EnvZeroFlg,	EnvAZero
 	PhaseAccEnvAUpd_End:
+	bst	EnvZeroFlg,	EnvBZero
+	brts PhaseAccEnvBUpd_End
+	PhaseAccEnvBUpd:
+		lds	r0,		ShiftedIncrementEB_L
+		; if octave MSB set, add to high and mid bytes
+		clr	r3
+		bst	r18,	3
+		brtc PhaseAccEnvBUpd_MidLo
+	PhaseAccEnvBUpd_MidHi:
+		lds	r1,		PhaseAccEnvB_H
+		add	r1,		r0
+		sts	PhaseAccEnvB_H,	r1
+		lds	r0,		ShiftedIncrementEB_H
+		adc	r3,		r0
+		rjmp PhaseAccEnvBUpd_ValueUpdate
+	PhaseAccEnvBUpd_MidLo:
+		; else add to mid and low bytes
+		lds	r1,		PhaseAccEnvB_L
+		add	r1,		r0
+		sts	PhaseAccEnvB_L,	r1
+		lds	r0,		ShiftedIncrementEB_H
+		lds	r1,		PhaseAccEnvB_H
+		adc	r1,		r0
+		sts	PhaseAccEnvB_H,	r1
+		adc	r3,		r3	; r3 is 0, therefore r3 becomes carry
+	PhaseAccEnvBUpd_ValueUpdate:
+		breq PhaseAccEnvBUpd_End	; Z flag set by the last adc with r3
+		; inc env pos by high byte
+		lds	EnvBVolume,	EnvStateA
+		add	EnvBVolume,	r3
+		sts	EnvStateA,	EnvBVolume	; doesn't affect carry
+		rol	r3	;	stores carry for later
+		sbrs EnvZeroFlg, EnvBSlope
+			com	EnvBVolume
+		bst	r3,		7
+		brtc PhaseAccEnvBUpd_End
+	PhaseAccEnvBUpd_Overflow:
+		bst r19,	ENV_B_ALT
+		brtc L010
+			ldi	r16,	1<<EnvBSlope	;	Invert slope
+			eor	EnvZeroFlg,	r16			;__
+		L010:
+		bst r19,	ENV_B_HOLD
+		brtc PhaseAccEnvBUpd_End
+			clr	EnvBVolume
+			sbrs EnvZeroFlg, EnvBSlope
+				dec	EnvBVolume
+			sbr	EnvZeroFlg,	EnvBZero
+	PhaseAccEnvBUpd_End:
 PhaseAccNoiseUpd:
 	lds	r0,		ShiftedIncrementN_L	;
 	add PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
@@ -683,10 +735,13 @@ SPITransfer_noOut:	; 21 cycles + 3 (RCALL)
 ret
 
 .set REG_OFF	= PITCH_LO_A
-PILOX_Routine:
-	std	Y+IncrementA-RAMOff-REG_OFF,	r1
+EPLA_RegHndl:
+	ldi	YL,		6
+PILOX_RegHndl:
 	ldd r2,	Y+OctaveValueA-RAMOff-REG_OFF
 	;	r1 = hi, r0 = lo, shifting right
+	L01B:
+	std	Y+IncrementA-RAMOff-REG_OFF,	r1
 	clr	r0
 	clc					
 	sbrc r2,	2	;
@@ -716,17 +771,8 @@ PILOX_Routine:
 	std	Y+ShiftedIncrementA_L-RAMOff-REG_OFF,	r0
 	rjmp AfterSPI
 
-.set REG_OFF	= DUTY_A
-LFSR_Routine:
-DUTYX_Routine:
-VOLX_Routine:
-CFGX_Routine:
-	subi YL,	REG_OFF
-	std Y+DutyCycles-RAMOff,	r1
-	rjmp AfterSPI
-
 .set REG_OFF	= PITCH_HI_AB_D
-PHIXY_Routine:
+PHIXY_RegHndl:
 	; Y has 0x06
 	lsl	YL
 	subi YL,	RAMOff
@@ -820,41 +866,155 @@ PHIXY_Routine:
 	L00A:
 	rjmp AfterSPI
 
-.set REG_OFF	= VOLUME_A
 
+.set REG_OFF	= DUTY_A
+DUTYX_RegHndl:
+LFSR_RegHndl:
+VOLX_RegHndl:
+CFGX_RegHndl:
+ELXX_RegHndl:
+	std Y+DutyCycles-RAMOff-REG_OFF,	r1
+	rjmp AfterSPI
 
-Dummy_Routine:
+ESHP_RegHndl:
+	clr	r0
+	lds	r2,		EnvLdBuffer+0
+	lds	r3,		EnvLdBuffer+1
+	bst	r1,		ENV_A_RST
+	brtc L011
+		sts	EnvStateA,	r0
+		sts	PhaseAccEnvA_L,	r2
+		sts	PhaseAccEnvA_H,	r3
+	L011:
+	bst	r1,		ENV_B_RST
+	brtc L012
+		sts	EnvStateB,	r0
+		sts	PhaseAccEnvB_L,	r2
+		sts	PhaseAccEnvB_H,	r3
+	L012:
+	sts	EnvShape,	r1
+	rjmp AfterSPI
+
+EPLB_RegHndl:
+	ldi	YL,		7
+	lds	r2,		OctaveValueEnv
+	swap r2
+	rjmp L01B
+
+EPH_RegHndl:
+	lds	ZL,		OctaveValueEnv	
+	mov	ZH,		ZL
+	eor	ZL,		r1
+	andi ZL,	0x7
+	breq L013	; If octave not changed, do nothing
+		lds	r2,		IncrementEA	;__	Get raw increment
+		;	r2 = high, r0 = low, shifting right
+		clr	r0
+		clc					
+		sbrc r1,	2	;
+		rjmp L014		;
+			ror r2		;
+			ror r0		;
+			ror r2		;	Shift increment 4 times if needed
+			ror r0		;
+			ror r2		;
+			ror r0		;
+			ror r2		;
+			ror r0		;
+		L014:			;__
+		sbrc r1,	1	;
+		rjmp L015		;
+			ror r2		;
+			ror r0		;	Shift increment 2 times if needed
+			ror r2		;
+			ror r0		;__
+		L015:			;
+		sbrc r1,	0	;
+		rjmp L016		;	Shift increment once more if needed
+			ror r2		;	
+			ror r0		;__
+		L016:			;	Store shifted increment
+		sts	ShiftedIncrementEA_H,	r2
+		sts ShiftedIncrementEA_L,	r0
+		
+	L013:
+	eor	ZH,		r1
+	andi ZH,	0x70
+	breq L017
+		lds	r2,		IncrementEB	;__	Get raw increment
+		;	r2 = high, r0 = low, shifting right
+		clr	r0
+		clc	
+		sbrc r1,	6	;
+		rjmp L018		;
+			ror r2		;
+			ror r0		;
+			ror r2		;	Shift increment 4 times if needed
+			ror r0		;
+			ror r2		;
+			ror r0		;
+			ror r2		;
+			ror r0		;
+		L018:			;__
+		sbrc r1,	5	;
+		rjmp L019		;
+			ror r2		;
+			ror r0		;	Shift increment 2 times if needed
+			ror r2		;
+			ror r0		;__
+		L019:			;
+		sbrc r1,	4	;
+		rjmp L01A		;	Shift increment once more if needed
+			ror r2		;	
+			ror r0		;__
+		L01A:			;	Store shifted increment
+		sts	ShiftedIncrementEB_H,	r2
+		sts	ShiftedIncrementEB_L,	r0
+	L017:
+	sts	OctaveValueEnv,	r1
+	
+Dummy_RegHndl:
 	rjmp AfterSPI
 
 CallTable:
 	; 0x00..05		(Pitch Lo X)
-	rjmp PILOX_Routine
-	rjmp PILOX_Routine
-	rjmp PILOX_Routine
-	rjmp PILOX_Routine
-	rjmp PILOX_Routine
-	rjmp PILOX_Routine
+	rjmp PILOX_RegHndl
+	rjmp PILOX_RegHndl
+	rjmp PILOX_RegHndl
+	rjmp PILOX_RegHndl
+	rjmp PILOX_RegHndl
+	rjmp PILOX_RegHndl
 	; 0x06..08		(Pitch Hi XY)
-	rjmp PHIXY_Routine
-	rjmp PHIXY_Routine
-	rjmp PHIXY_Routine
+	rjmp PHIXY_RegHndl
+	rjmp PHIXY_RegHndl
+	rjmp PHIXY_RegHndl
 	; 0x09..0D		(Duty Cycle X)
-	rjmp DUTYX_Routine
-	rjmp DUTYX_Routine
-	rjmp DUTYX_Routine
-	rjmp DUTYX_Routine
-	rjmp DUTYX_Routine
-	rjmp LFSR_Routine
-	rjmp LFSR_Routine
+	rjmp DUTYX_RegHndl
+	rjmp DUTYX_RegHndl
+	rjmp DUTYX_RegHndl
+	rjmp DUTYX_RegHndl
+	rjmp DUTYX_RegHndl
+	rjmp LFSR_RegHndl
+	rjmp LFSR_RegHndl
 	; 0x10..15
-	rjmp VOLX_Routine
-	rjmp VOLX_Routine
-	rjmp VOLX_Routine
-	rjmp VOLX_Routine
-	rjmp VOLX_Routine
+	rjmp VOLX_RegHndl
+	rjmp VOLX_RegHndl
+	rjmp VOLX_RegHndl
+	rjmp VOLX_RegHndl
+	rjmp VOLX_RegHndl
 	; 0x16..19
-	rjmp CFGX_Routine
-	rjmp CFGX_Routine
-	rjmp CFGX_Routine
-	rjmp CFGX_Routine
-	rjmp CFGX_Routine
+	rjmp CFGX_RegHndl
+	rjmp CFGX_RegHndl
+	rjmp CFGX_RegHndl
+	rjmp CFGX_RegHndl
+	rjmp CFGX_RegHndl
+	; 0x1A..1B
+	rjmp ELXX_RegHndl
+	rjmp ELXX_RegHndl
+	; 0x1C
+	rjmp ESHP_RegHndl
+	; 0x1D..1E
+	rjmp EPLA_RegHndl
+	rjmp EPLB_RegHndl
+	; 0x1F
+	rjmp EPH_RegHndl
