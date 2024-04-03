@@ -62,7 +62,7 @@ typedef struct __ATtiny85APU {
 	bool outPending;
 	
 	// Output
-	uint8_t channelOutput[5];
+	uint16_t channelOutput[5];
 	uint32_t currentOutput, nextOutput;
 } t85APU;
 

@@ -304,6 +304,12 @@ Registers:
 	.equ ENV_B_ATT	= 6
 	.equ ENV_B_RST	= 7
 
+	; CFGX
+	.equ ENV_EN		= 6
+	;	0x1n	| CFGX	|NoiseEn| EnvEn |Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
+	.equ ENV_SMP	= 5
+	.equ SLOT_NUM	= 4
+
 
 .cseg
 
@@ -379,6 +385,7 @@ Init:
 	movw SmpAVolume,	r0
 
 	ldi r16,	0x5F
+	ldi	r17,	0x0F
 
 	ldi YL,		0x64
 	clr YH
@@ -386,7 +393,7 @@ Init:
 	Clear5Loop:
 		std Y+DutyCycles-RamOff,	r0
 		std Y+Volumes-RamOff,		r0
-		std	Y+ChannelConfigs-RamOff,r0
+		std	Y+ChannelConfigs-RamOff,r17
 		dec	YL
 		cpse YL,	r16
 		rjmp Clear5Loop
@@ -420,7 +427,7 @@ Init:
 	ldi	r16,	0x24
 	sts	NoiseXOR+0,		r0
 	sts	NoiseXOR+1,		r16
-	clr NoiseMask
+	ldi NoiseMask,		0x7F
 
 	sts EnvShape,		r0
 	ldi	EnvZeroFlg,		1<<EnvAZero|1<<EnvBZero|1<<SmpAZero|1<<SmpBZero
@@ -430,7 +437,9 @@ Forever:
 	rjmp Forever
 
 Cycle:
-	out	OCR1B,	r26		; Update sound
+	ror	LOut_H
+	ror	LOut_L
+	out	OCR1B,	LOut_L	; Update sound
 
 	cbi	PortB,	PB3
 
@@ -465,7 +474,8 @@ Cycle:
 
 AfterSPI:
 	sbi PortB,	PB3
-	clr r26
+	clr LOut_L
+	clr LOut_H
 PhaseAccEnvUpd:
 	; UP TO 46 CYCLES AAAAAAAAAAAAAAAAAAAA
 	; lds env octave (only once)
@@ -517,7 +527,7 @@ PhaseAccEnvUpd:
 		bst r19,	ENV_A_HOLD
 		brtc PhaseAccEnvAUpd_End
 			clr	EnvAVolume
-			sbrs EnvZeroFlg, EnvASlope
+			sbrc EnvZeroFlg, EnvASlope
 				dec	EnvAVolume
 			sbr	EnvZeroFlg,	EnvAZero
 	PhaseAccEnvAUpd_End:
@@ -566,7 +576,7 @@ PhaseAccEnvUpd:
 		bst r19,	ENV_B_HOLD
 		brtc PhaseAccEnvBUpd_End
 			clr	EnvBVolume
-			sbrs EnvZeroFlg, EnvBSlope
+			sbrc EnvZeroFlg, EnvBSlope
 				dec	EnvBVolume
 			sbr	EnvZeroFlg,	EnvBZero
 	PhaseAccEnvBUpd_End:
@@ -577,7 +587,7 @@ PhaseAccNoiseUpd:
 	adc	PhaseAccN_H,	r0			;__
 
 	brcc PhaseAccChAUpd
-		clr	NoiseMask
+		ldi	NoiseMask,	0x7F
 		lds	r0,		NoiseLFSR+0		;
 		lds r1,		NoiseLFSR+1		;
 		clc							;	Shift LFSR
@@ -588,14 +598,14 @@ PhaseAccNoiseUpd:
 			eor	r0,		r2			;	XOR if needed
 			lds	r2,		NoiseXOR+1	;
 			eor	r1,		r2			;__
-			ldi	NoiseMask,	0x80	;__	Update noise mask
+			ser	NoiseMask			;__	Update noise mask
 		NoiseLFSRBack:
 		sts	NoiseLFSR+0,	r0		;	Update the LFSR
 		sts NoiseLFSR+1,	r1		;__
 
 PhaseAccChAUpd:
-	lds	r1,		ChannelConfigA		;	Get noise mask
-	and	r1,		NoiseMask			;__
+	lds	r16,	ChannelConfigA		;	Get noise mask
+	and	r16,	NoiseMask			;__
 
 	lds	r0,		ShiftedIncrementA_L	;
 	add	PhaseAccA_L,	r0			;	PhaseAcc += shifted inc value
@@ -604,13 +614,38 @@ PhaseAccChAUpd:
 
 	lds	r0,		DutyCycleA			;
 	cp	PhaseAccA_H,	r0			;	If > duty cycle, then OR it with the noise
-	brsh PhaseAccChAFin				;__
-		inc	r1						;__
-	PhaseAccChAFin:					;
-	tst r1							;
-	breq RealEnd					;
+	brsh L01C						;__
+		sbr	r16,	7				;__
+	L01C:							;
+	tst r16							;	Output 0 if nothing is output
+	brpl RealEnd					;__
 		lds	r0,		VolumeA			;
-		mov r26,	r0				;__
+		sbrs r16,	ENV_EN			;	If envelope/sample disabled, just put the volume
+		rjmp L01D					;__
+			mov	YL,		r16			;
+			swap YL					;	Load the envelope/sample volume
+			andi YL,	0x03		;
+			ldd	r2,	Y+20			;__
+			sbrs r0,	7			;	Shift once if volume is low
+				lsr	r2				;__
+			mov	r0,		r2			;
+		L01D:						;
+		clr	r3						;
+		sbrs r16,	0				;	Store the upper bit of volume
+		rjmp L01E					;
+			add	LOut_L,	r0			;
+			adc	LOut_H,	r3			;__
+		L01E:						;
+		sbrs r16,	1				;
+		rjmp RealEnd				;
+			clc						;
+			clr	r3					;	Store the lower bit of volume
+			rol	r0					;
+			adc	LOut_H,	r3			;
+			add	LOut_L,	r0			;
+			adc	LOut_H,	r3			;__
+			
+		
 RealEnd:
 	in	r0,		TIFR
 	bst	r0,		TOV1
@@ -911,6 +946,10 @@ ESHP_RegHndl:
 		cbr	EnvZeroFlg,	EnvBZero
 	L012:
 	sts	EnvShape,	r1
+	bst	r1,		ENV_A_ATT
+	bld	EnvZeroFlg,	EnvASlope
+	bst	r1,		ENV_B_ATT
+	bld	EnvZeroFlg,	EnvBSlope
 	rjmp AfterSPI
 
 EPLB_RegHndl:

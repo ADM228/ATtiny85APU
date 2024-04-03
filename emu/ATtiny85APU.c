@@ -45,7 +45,7 @@ void t85APU_reset (t85APU * apu) {
 
 	memset(apu->dutyCycles,		0,	sizeof(uint8_t)*5);
 	memset(apu->volumes,		0,	sizeof(uint8_t)*5);
-	memset(apu->channelConfigs,	0,	sizeof(uint8_t)*5);
+	memset(apu->channelConfigs,	0x0F,	sizeof(uint8_t)*5);
 
 	memset(apu->increments,			0,	sizeof(uint8_t)*8);
 	memset(apu->shiftedIncrements,	0,	sizeof(uint16_t)*8);
@@ -57,7 +57,7 @@ void t85APU_reset (t85APU * apu) {
 	apu->envLdBuffer = 0;
 	
 	memset(apu->channelOutput,		0,	sizeof(uint8_t)*5);
-	apu->noiseMask = 0;
+	apu->noiseMask = 0x7F;
 
 	apu->clockCycle = 0;	// technically simplified
 
@@ -215,25 +215,7 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 			apu->envLdBuffer = (apu->envLdBuffer & 0xFF) | (data << 8);
 			break;
 		case 28:
-			ZL = apu->octaveValues[6];
-			ZH = ZL;
-			ZL = (ZL ^ data) & 0x07;
-			if (ZL) apu->shiftedIncrements[6] = data << (1+(data & 0x07));
-			ZH = (ZH ^ data) & 0x70;
-			if (ZL) apu->shiftedIncrements[7] = data << (1+((data >> 4) & 0x07));
-			apu->octaveValues[6] = data;
-			break;
-		case 29:
-		case 30:
-			// Envelope low pitch
-			apu->increments[addr-23] = r1;
-			r2 = apu->octaveValues[7];
-			if (addr == 30) r2 >>= 4;
-
-			apu->shiftedIncrements[addr-23] = data << (1+(r2 & 0x07));;
-			
-			break;
-		case 31:
+			// Envelope shape
 			if (data & 1<<ENV_A_RST) {
 				apu->envPhaseAccs[0] = ((apu->envLdBuffer << 8) & 0xFF00);
 				apu->envStates[0] = ((apu->envLdBuffer >> 8) & 0xFF);
@@ -245,6 +227,29 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 				apu->envZeroFlg &= ~(1<<EnvBZero);
 			}
 			apu->envShape = data;
+			apu->envZeroFlg &= ~(1<<EnvASlope|1<<EnvBSlope);
+			apu->envZeroFlg |= (data & 1<<ENV_A_ATT) ? 1<<EnvASlope : 0;
+			apu->envZeroFlg |= (data & 1<<ENV_B_ATT) ? 1<<EnvBSlope : 0;
+			break;
+		case 29:
+		case 30:
+			// Envelope low pitch
+			apu->increments[addr-23] = r1;
+			r2 = apu->octaveValues[6];
+			if (addr == 30) r2 >>= 4;
+
+			apu->shiftedIncrements[addr-23] = data << (1+(r2 & 0x07));
+			
+			break;
+		case 31:
+			// Envelope high pitch
+			ZL = apu->octaveValues[6];
+			ZH = ZL;
+			ZL = (ZL ^ data) & 0x07;
+			if (ZL) apu->shiftedIncrements[6] = data << (1+(data & 0x07));
+			ZH = (ZH ^ data) & 0x70;
+			if (ZL) apu->shiftedIncrements[7] = data << (1+((data >> 4) & 0x07));
+			apu->octaveValues[6] = data;
 			break;
 		default:
 			break;
@@ -276,11 +281,11 @@ void t85APU_cycle (t85APU * apu) {
 		if (r3) {
 			apu->envStates[0] += r3;
 			apu->envVolume[0] = apu->envStates[0];
-			if (!(apu->envZeroFlg | 1<<EnvASlope)) apu->envVolume[0] ^= 0xFF;
-			if ((fakeAcc >> 24) & 1) {	// If the envelope overflowed
+			if (!(apu->envZeroFlg & 1<<EnvASlope)) apu->envVolume[0] ^= 0xFF;
+			if (apu->envStates[0] < r3) {	// If the envelope overflowed
 				if (apu->envShape & 1<<ENV_A_ALT) apu->envZeroFlg ^= 1<<EnvASlope;
 				if (apu->envShape & 1<<ENV_A_HOLD) {
-					apu->envVolume[0] = (apu->envZeroFlg & 1<<EnvASlope) ? 0x00 : 0xFF;
+					apu->envVolume[0] = (apu->envZeroFlg & 1<<EnvASlope) ? 0xFF : 0x00;
 					apu->envZeroFlg |= 1<<EnvAZero;
 				}
 			}
@@ -294,11 +299,11 @@ void t85APU_cycle (t85APU * apu) {
 		if (r3) {
 			apu->envStates[1] += r3;
 			apu->envVolume[1] = apu->envStates[1];
-			if (!(apu->envZeroFlg | 1<<EnvBSlope)) apu->envVolume[1] ^= 0xFF;
-			if ((fakeAcc >> 24) & 1) {	// If the envelope overflowed
+			if (!(apu->envZeroFlg & 1<<EnvBSlope)) apu->envVolume[1] ^= 0xFF;
+			if (apu->envStates[1] < r3) {	// If the envelope overflowed
 				if (apu->envShape & 1<<ENV_B_ALT) apu->envZeroFlg ^= 1<<EnvBSlope;
 				if (apu->envShape & 1<<ENV_B_HOLD) {
-					apu->envVolume[1] = (apu->envZeroFlg & 1<<EnvBSlope) ? 0x00 : 0xFF;
+					apu->envVolume[1] = (apu->envZeroFlg & 1<<EnvBSlope) ? 0xFF : 0x00;
 					apu->envZeroFlg |= 1<<EnvBZero;
 				}
 			}
@@ -308,17 +313,25 @@ void t85APU_cycle (t85APU * apu) {
 	apu->noisePhaseAcc += apu->shiftedIncrements[5];
 	if (apu->noisePhaseAcc < apu->shiftedIncrements[5])	{	// If overflowed
 		bool carry = apu->noiseLFSR & 1;
-		apu->noiseMask = carry ? 0 : 0x80;
+		apu->noiseMask = carry ? 0x7F : 0xFF;
 		apu->noiseLFSR >>= 1;
 		if (!carry) apu->noiseLFSR ^= apu->noiseXOR;
 	}
 	for (int ch = 0; ch < 5; ch++) {
 		uint8_t r1 = apu->channelConfigs[ch] & apu->noiseMask;
 		apu->tonePhaseAccs[ch] += apu->shiftedIncrements[ch];
-		if (apu->tonePhaseAccs[ch] >> 8 < apu->dutyCycles[ch]) r1++;	// really another bit set
-		apu->channelOutput[ch] = r1 ? apu->volumes[ch] : 0;
+		if (apu->tonePhaseAccs[ch] >> 8 < apu->dutyCycles[ch]) r1 |= 1<<7;	// really another bit set
+		if (r1 & 1<<7) {
+			uint8_t r0 = apu->volumes[ch];
+			if (r1 & 1<<6) {
+				uint8_t envVol = *((uint8_t*)apu->envVolume + ((r1>>4) & 0x03));
+				if (!(r0 & 0x80)) envVol >>= 1;
+				r0 = envVol;
+			}
+			apu->channelOutput[ch] = r0 * (r1 & 0x03);
+		} else apu->channelOutput[ch] = 0;
 	}
-	apu->nextOutput = apu->channelOutput[0];
+	apu->nextOutput = apu->channelOutput[0] >> 1;
 }
 
 void t85APU_tick (t85APU * apu) {

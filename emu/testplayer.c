@@ -29,15 +29,20 @@ int main () {
     file = fopen("test.raw", "wb");
 
     t85APU_writeReg(apu, 0x06, 0x0B);
-    t85APU_writeReg(apu, 0x09, 0x20);
-    t85APU_writeReg(apu, 0x15, 0x80);
-    t85APU_writeReg(apu, 0x05, 0xFF);
-    t85APU_writeReg(apu, 0x08, 0xF0);
+    t85APU_writeReg(apu, 0x09, 0xFF);
+    t85APU_writeReg(apu, 0x1F, 0x0B);
+    // t85APU_writeReg(apu, 0x15, 0x83);
+    t85APU_writeReg(apu, 0x15, 0x43);
+    // t85APU_writeReg(apu, 0x05, 0xFF);
+    // t85APU_writeReg(apu, 0x08, 0xF0);
 
     uint32_t output;
 
+    for (int env = 8; env < 16; env++ ) {
     for (int i = 0; i < sizeof(megalovania); i++) {
-        t85APU_writeReg(apu, 0x00, megalovania[i]);
+        // t85APU_writeReg(apu, 0x00, megalovania[i]);
+        t85APU_writeReg(apu, 0x1D, megalovania[i]);
+        t85APU_writeReg(apu, 0x1C, env);
         t85APU_writeReg(apu, 0x10, 0xFF);
         writeShit(); writeShit();
         t85APU_writeReg(apu, 0x10, 0xC0);
@@ -49,6 +54,7 @@ int main () {
         t85APU_writeReg(apu, 0x10, 0x00);
         writeShit();
         printf("Playback: %2X \n", i);
+    }
     }
     fclose(file);
 
