@@ -1,5 +1,5 @@
 #include "ATtiny85APU.h"
-#include <math.h>
+#include <tgmath.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,11 +8,11 @@
 #define STACK_REG 1
 
 #define EnvAZero 0
-#define EnvBZero 1
-#define SmpAZero 2
-#define SmpBZero 3
-#define EnvASlope 4
-#define EnvBSlope 5
+#define SmpAZero 1
+#define EnvASlope 2
+#define EnvBZero 4
+#define SmpBZero 5
+#define EnvBSlope 6
 
 #define ENV_A_HOLD	0
 #define ENV_A_ALT	1
@@ -216,20 +216,23 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 			break;
 		case 28:
 			// Envelope shape
+			r3 = apu->envShape;
+			r3 ^= data;
+			r3 &= (1<<ENV_A_ATT)|(1<<ENV_B_ATT);
+			apu->envZeroFlg ^= r3;
 			if (data & 1<<ENV_A_RST) {
 				apu->envPhaseAccs[0] = ((apu->envLdBuffer << 8) & 0xFF00);
 				apu->envStates[0] = ((apu->envLdBuffer >> 8) & 0xFF);
-				apu->envZeroFlg &= ~(1<<EnvAZero);
+				apu->envZeroFlg &= ~((1<<EnvAZero)|(1<<EnvASlope));
+				apu->envZeroFlg |= data & 1<<ENV_A_ATT;
 			}
 			if (data & 1<<ENV_B_RST) {
 				apu->envPhaseAccs[1] = ((apu->envLdBuffer << 8) & 0xFF00);
 				apu->envStates[1] = ((apu->envLdBuffer >> 8) & 0xFF);
-				apu->envZeroFlg &= ~(1<<EnvBZero);
+				apu->envZeroFlg &= ~((1<<EnvBZero)|(1<<EnvBSlope));
+				apu->envZeroFlg |= data & 1<<ENV_B_ATT;
 			}
 			apu->envShape = data;
-			apu->envZeroFlg &= ~(1<<EnvASlope|1<<EnvBSlope);
-			apu->envZeroFlg |= (data & 1<<ENV_A_ATT) ? 1<<EnvASlope : 0;
-			apu->envZeroFlg |= (data & 1<<ENV_B_ATT) ? 1<<EnvBSlope : 0;
 			break;
 		case 29:
 		case 30:
@@ -331,7 +334,11 @@ void t85APU_cycle (t85APU * apu) {
 			apu->channelOutput[ch] = r0 * (r1 & 0x03);
 		} else apu->channelOutput[ch] = 0;
 	}
-	apu->nextOutput = apu->channelOutput[0] >> 1;
+	uint32_t output = 0;
+	for (int i = 0; i < 5; i++) {output += apu->channelOutput[i];}
+	output *= 274;	// the Multiply routine
+	output >>= 20 - (uint32_t)fmin(apu->outputBitdepth, 20);
+	apu->nextOutput = output;
 }
 
 void t85APU_tick (t85APU * apu) {

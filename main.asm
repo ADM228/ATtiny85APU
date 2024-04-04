@@ -157,11 +157,11 @@
 .def	LOut_H		= r27
 
 .equ	EnvAZero	= 0
-.equ	EnvBZero	= 1
-.equ	SmpAZero	= 2
-.equ	SmpBZero	= 3
-.equ	EnvASlope	= 4
-.equ	EnvBSlope	= 5
+.equ	SmpAZero	= 1
+.equ	EnvASlope	= 2
+.equ	EnvBZero	= 4
+.equ	SmpBZero	= 5
+.equ	EnvBSlope	= 6
 
 .dseg
 NoiseLFSR:			.byte 2
@@ -328,10 +328,8 @@ Init:
 	ldi	r16,	Low(RAMEND)
 	out	SPL,	r16 ; Init LSB stack pointer
 	; Set timer 0 freq to max for SPI + SPI settings
-	clr r31
 	clr r0
 	clr r1
-	clr r3
 	clr r16
 	out TCCR0B,	r16	; (0<<FOC0A)|(0<<FOC0B)|\	; No force strobe
 					; (0<<WGM02)|\				; Total wavegen mode = 000 (normal)
@@ -362,18 +360,18 @@ Init:
 	ldi r16,	(0<<CTC1)|(0<<PWM1A)|(0b00<<COM1A0)|(1<<CS10)
 	out TCCR1,	r16			;__
 	; Set Port modes
-	ldi r18,	(1<<PB3)|(1<<PWM_OUT)|(0<<DI)|(1<<DO)|(1<<USCK)
-	out DDRB,	r18
-	ldi r18,	(1<<PB3)|(1<<PWM_OUT)
-	out PortB,	r18
+	ldi r16,	(1<<PB3)|(1<<PWM_OUT)|(0<<DI)|(1<<DO)|(1<<USCK)
+	out DDRB,	r16
+	ldi r16,	(1<<PB3)|(1<<PWM_OUT)
+	out PortB,	r16
 
 	ldi r16,	(1<<CLKPCE)	;
 	ldi	r17,	(0<<CLKPS0)	;	Set to 8MHz
 	out	CLKPR,	r16			;
 	out	CLKPR,	r17			;__
 
-	ldi r26,	0xA5
-	out USIDR,	r26
+	ldi r16,	0xA5
+	out USIDR,	r16
 
 	movw PhaseAccA_L, 	r0
 	movw PhaseAccB_L, 	r0
@@ -387,18 +385,8 @@ Init:
 	ldi r16,	0x5F
 	ldi	r17,	0x0F
 
-	ldi YL,		0x64
-	clr YH
-
-	Clear5Loop:
-		std Y+DutyCycles-RamOff,	r0
-		std Y+Volumes-RamOff,		r0
-		std	Y+ChannelConfigs-RamOff,r17
-		dec	YL
-		cpse YL,	r16
-		rjmp Clear5Loop
-
 	ldi YL,		0x67
+	clr YH
 
 	ClearOscLoop:
 		std Y+Increments-RamOff,		r0
@@ -408,6 +396,17 @@ Init:
 		dec YL
 		cpse YL,	r16
 		rjmp ClearOscLoop
+	
+	ldi YL,		0x64
+
+	Clear5Loop:
+		std Y+DutyCycles-RamOff,	r0
+		std Y+Volumes-RamOff,		r0
+		std	Y+ChannelConfigs-RamOff,r17
+		dec	YL
+		cpse YL,	r16
+		rjmp Clear5Loop
+
 
 	ldi YL,		0x61
 	
@@ -437,31 +436,24 @@ Forever:
 	rjmp Forever
 
 Cycle:
-	ror	LOut_H
-	ror	LOut_L
-	out	OCR1B,	LOut_L	; Update sound
-
 	cbi	PortB,	PB3
 
 	sbis PINB,	PINB0	; If no input pending, skip this
 	rjmp AfterSPI
 
-	clr	r3
-
-	mov	r18,	r26
 	rcall	SPITransfer
 
 	andi r18,	0x7F	;
-	cpi	r18,	0x16	;
+	cpi	r18,	(CallTableEnd-CallTable)
 	brlo L000			;	Get reg number
-	ldi	r18,	0x10	;
+	ldi	r18,	(CallTableEnd-CallTable-1)
 	L000:				;__
 	ldi	YL,		RAMOff	;
 	add	YL,		r18		;	Get reg number into Y
 	clr	YH				;__
 
-	ldi	ZH,		(CallTable>>8)&0xFF
-	ldi	ZL,		(CallTable&0xFF)	
+	ldi	ZH,		high(CallTable)
+	ldi	ZL,		low(CallTable)	
 	add ZL,		r18		;	Get IJMP pointer into Z
 	adc	ZH,		YH		;__
 
@@ -483,7 +475,7 @@ PhaseAccEnvUpd:
 	lds	r19,	EnvShape
 	; skip if inc == 0
 	bst	EnvZeroFlg,	EnvAZero
-	brts PhaseAccEnvAUpd_End
+	brts PhaseAccEnvAUpd_Skip
 	PhaseAccEnvAUpd:
 		lds	r0,		ShiftedIncrementEA_L
 		; if octave MSB set, add to high and mid bytes
@@ -508,7 +500,7 @@ PhaseAccEnvUpd:
 		sts	PhaseAccEnvA_H,	r1
 		adc	r3,		r3	; r3 is 0, therefore r3 becomes carry
 	PhaseAccEnvAUpd_ValueUpdate:
-		breq PhaseAccEnvAUpd_End	; Z flag set by the last adc with r3
+		breq PhaseAccEnvAUpd_Skip	; Z flag set by the last adc with r3
 		; inc env pos by high byte
 		lds	EnvAVolume,	EnvStateA
 		add	EnvAVolume,	r3
@@ -522,11 +514,12 @@ PhaseAccEnvUpd:
 		L00F:
 		bst r19,	ENV_A_HOLD
 		brtc PhaseAccEnvAUpd_End
-			set	EnvAVolume
-			sbr	EnvZeroFlg,	EnvAZero
+			ser	EnvAVolume
+			sbr	EnvZeroFlg,	1<<EnvAZero
 	PhaseAccEnvAUpd_End:
 		sbrs EnvZeroFlg, EnvASlope
 			com	EnvAVolume
+	PhaseAccEnvAUpd_Skip:
 	bst	EnvZeroFlg,	EnvBZero
 	brts PhaseAccEnvBUpd_End
 	PhaseAccEnvBUpd:
@@ -567,8 +560,8 @@ PhaseAccEnvUpd:
 		L010:
 		bst r19,	ENV_B_HOLD
 		brtc PhaseAccEnvBUpd_End
-			set	EnvBVolume
-			sbr	EnvZeroFlg,	EnvBZero
+			ser	EnvBVolume
+			sbr	EnvZeroFlg,	1<<EnvBZero
 	PhaseAccEnvBUpd_End:
 		sbrs EnvZeroFlg, EnvBSlope
 			com	EnvBVolume
@@ -582,8 +575,7 @@ PhaseAccNoiseUpd:
 		ldi	NoiseMask,	0x7F
 		lds	r0,		NoiseLFSR+0		;
 		lds r1,		NoiseLFSR+1		;
-		clc							;	Shift LFSR
-		ror	r1						;
+		lsr	r1						;	Shift LFSR
 		ror	r0						;__
 		brcs NoiseLFSRBack			;
 			lds	r2,		NoiseXOR+0	;
@@ -607,10 +599,11 @@ PhaseAccChAUpd:
 	lds	r0,		DutyCycleA			;
 	cp	PhaseAccA_H,	r0			;	If > duty cycle, then OR it with the noise
 	brsh L01C						;__
-		sbr	r16,	7				;__
+		sbr	r16,	0x80			;__
 	L01C:							;
-	tst r16							;	Output 0 if nothing is output
-	brpl RealEnd					;__
+	clr	r0							;
+	sbrs r16,	7					;	Output 0 if nothing is output
+	rjmp Multiply					;__
 		lds	r0,		VolumeA			;
 		sbrs r16,	ENV_EN			;	If envelope/sample disabled, just put the volume
 		rjmp L01D					;__
@@ -622,40 +615,20 @@ PhaseAccChAUpd:
 				lsr	r2				;__
 			mov	r0,		r2			;
 		L01D:						;
-		clr	r3						;
 		sbrs r16,	0				;	Store the upper bit of volume
 		rjmp L01E					;
 			add	LOut_L,	r0			;
-			adc	LOut_H,	r3			;__
+			adc	LOut_H,	YH			;__
 		L01E:						;
 		sbrs r16,	1				;
-		rjmp RealEnd				;
-			clc						;
-			clr	r3					;	Store the lower bit of volume
-			rol	r0					;
-			adc	LOut_H,	r3			;
+		rjmp Multiply				;
+			lsl	r0					;	Store the lower bit of volume
+			adc	LOut_H,	YH			;
 			add	LOut_L,	r0			;
-			adc	LOut_H,	r3			;__
+			adc	LOut_H,	YH			;__
 			
-		
-RealEnd:
-	in	r0,		TIFR
-	bst	r0,		TOV1
-	brtc Delay
-	ldi r16,	1<<TOV1	;	Acknowledge second interrupt
-	out TIFR,	r16		;__
-	reti
-Delay:
-	in	r0,		TCNT1
-	com	r0
-	lsr r0
-	breq RealEnd
-	L00B:
-		dec	r0
-		brne L00B
-	rjmp RealEnd
 
-Multiply:	; 28 cycles  
+Multiply:	; 27 cycles  
 	; needs 3 registers
 
 	; Constant multiplier of 822,
@@ -675,46 +648,43 @@ Multiply:	; 28 cycles
 	; output low: r2
 	; output mid: r0
 	; output high: r1
-	; tmp 0:	  r3
 
-	clr r3
+	movw r16,	LOut_L
 
 	movw r0,	r16	; High:Mid is now 3X, '' 00110110
-	; clc	; Never occurs within valid range
-	rol	r16
-	rol	r17				
+	lsl	r16
+	rol	r17
 	mov	r2,		r16		;
 	add	r0,		r17		;	.. 00110''0
-	adc	r1,		r3		;__
+	adc	r1,		YH		;__
 	; Shift further by 3
-	; clc 	; Cannot occur
-	rol r16				;	Total shift: 2
+	lsl r16				;	Total shift: 2
 	rol r17				;__
-	rol r16				;	Total shift: 3
+	lsl r16				;	Total shift: 3
 	rol r17				;__
-	rol r16				;	Total shift: 4
+	lsl r16				;	Total shift: 4
 	rol r17				;__
 	add	r2,		r16		;
 	adc	r0,		r17		;	.. 00''0..0
-	adc	r1,		r3		;__
+	adc	r1,		YH		;__
 
 	.if BITDEPTH == 8
-						; r1:r0 = 0XYZ
-	swap r1				; 0XZY
-	swap r0				; X0ZY
-	ldi	r16,	$F0		; X0ZY
-	and	r1,		r16		; X00Y
-	or	r1,		r0		; XY--
+						; r0	r1		total
+						; YZ	0X		0XYZ
+	swap r1				; YZ	X0		X0YZ
+	swap r0				; ZY	X0		X0ZY
+	ldi	r16,	$0F		; 
+	and	r0,		r16		; 0Y	X0		X00Y
+	or	r0,		r1		; XY	X0		--XY
 	; BAM r0 now has the output value
 
 	.elseif BITDEPTH > 8 && BITDEPTH <= 12
 	.if defined(OUTPUT_DAC7311) || defined(OUTPUT_DAC6311) || defined(OUTPUT_DAC5311) || defined(OUTPUT_DAC7612)
 	; TI DACs have a 2-bit prefix before the data
-						; r1:r0 = 0000xxxx yyyyzzzz
-	clc					;__
-	rol	r1				; r1:r0 = 000xxxxy yyyzzzz0
+						;__	r1:r0 = 0000xxxx yyyyzzzz
+	lsl	r1				;	r1:r0 = 000xxxxy yyyzzzz0
 	rol	r0				;__
-	rol r1				; r1:r0	= 00xxxxyy yyzzzz00
+	lsl r1				;	r1:r0	= 00xxxxyy yyzzzz00
 	rol r0				;__
 	; Bam the output is now correct
 	.elseif defined(OUTPUT_MCP4801) || defined(OUTPUT_MCP4811) || defined(OUTPUT_MCP4821) || defined(OUTPUT_MCP4802) || defined(OUTPUT_MCP4812) || defined(OUTPUT_MCP4822)
@@ -725,6 +695,23 @@ Multiply:	; 28 cycles
 	.endif
 	.endif
 
+RealEnd:
+	out	OCR1B,	r0
+	in	r0,		TIFR
+	bst	r0,		TOV1
+	brtc Delay
+	ldi r16,	1<<TOV1	;	Acknowledge second interrupt
+	out TIFR,	r16		;__
+	reti
+Delay:
+	in	r0,		TCNT1
+	com	r0
+	lsr r0
+	breq RealEnd
+	L00B:
+		dec	r0
+		brne L00B
+	rjmp RealEnd
 
 
 ; Delay:
@@ -768,35 +755,34 @@ ret
 
 .set REG_OFF	= PITCH_LO_A
 EPLA_RegHndl:
-	ldi	YL,		6
+	ldi	YL,		6+RAMOff
 PILOX_RegHndl:
 	ldd r2,	Y+OctaveValueA-RAMOff-REG_OFF
 	;	r1 = hi, r0 = lo, shifting right
 	L01B:
 	std	Y+IncrementA-RAMOff-REG_OFF,	r1
 	clr	r0
-	clc					
 	sbrc r2,	2	;
 	rjmp L00C		;
-		ror r1		;
+		lsr r1		;
 		ror r0		;
-		ror r1		;	Shift increment 4 times if needed
+		lsr r1		;	Shift increment 4 times if needed
 		ror r0		;
-		ror r1		;
+		lsr r1		;
 		ror r0		;
-		ror r1		;
+		lsr r1		;
 		ror r0		;
 	L00C:			;__
 	sbrc r2,	1	;
 	rjmp L00D		;
-		ror r1		;
+		lsr r1		;
 		ror r0		;	Shift increment 2 times if needed
-		ror r1		;
+		lsr r1		;
 		ror r0		;__
 	L00D:			;
 	sbrc r2,	0	;
 	rjmp L00E		;	Shift increment once more if needed
-		ror r1		;	
+		lsr r1		;	
 		ror r0		;__
 	L00E:			;	Store shifted increment
 	std	Y+ShiftedIncrementA_H-RAMOff-REG_OFF,	r1
@@ -819,28 +805,27 @@ PHIXY_RegHndl:
 		ldd	r2,		Y+IncrementA-RAMOff-REG_OFF	;__	Get raw increment
 		;	r2 = high, r0 = low, shifting right
 		clr	r0
-		clc					
 		sbrc r1,	2	;
 		rjmp L003		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;	Shift increment 4 times if needed
+			lsr r2		;	Shift increment 4 times if needed
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
 		L003:			;__
 		sbrc r1,	1	;
 		rjmp L004		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;	Shift increment 2 times if needed
-			ror r2		;
+			lsr r2		;
 			ror r0		;__
 		L004:			;
 		sbrc r1,	0	;
 		rjmp L005		;	Shift increment once more if needed
-			ror r2		;	
+			lsr r2		;	
 			ror r0		;__
 		L005:			;	Store shifted increment
 		std	Y+ShiftedIncrementA_H-RAMOff-REG_OFF,	r2
@@ -858,28 +843,27 @@ PHIXY_RegHndl:
 		ldd	r2,		Y+IncrementB-RAMOff-REG_OFF	;__	Get raw increment
 		;	r2 = high, r0 = low, shifting right
 		clr	r0
-		clc	
 		sbrc r1,	6	;
 		rjmp L006		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;	Shift increment 4 times if needed
+			lsr r2		;	Shift increment 4 times if needed
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
 		L006:			;__
 		sbrc r1,	5	;
 		rjmp L007		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;	Shift increment 2 times if needed
-			ror r2		;
+			lsr r2		;
 			ror r0		;__
 		L007:			;
 		sbrc r1,	4	;
 		rjmp L008		;	Shift increment once more if needed
-			ror r2		;	
+			lsr r2		;	
 			ror r0		;__
 		L008:			;	Store shifted increment
 		std	Y+ShiftedIncrementB_H-RAMOff-REG_OFF,	r2
@@ -909,32 +893,37 @@ ELXX_RegHndl:
 	rjmp AfterSPI
 
 ESHP_RegHndl:
-	clr	r0
+	lds	r16,	EnvShape
 	lds	r2,		EnvLdBuffer+0
 	lds	r3,		EnvLdBuffer+1
+
+	eor r16,	r1
+	andi r16,	1<<ENV_A_ATT|1<<ENV_B_ATT
+	eor	EnvZeroFlg,	r16
+
 	bst	r1,		ENV_A_RST
 	brtc L011
 		sts	EnvStateA,	r3
 		sts	PhaseAccEnvA_L,	r0
 		sts	PhaseAccEnvA_H,	r2
-		cbr	EnvZeroFlg,	EnvAZero
+		cbr	EnvZeroFlg,	1<<EnvAZero
+		bst	r1,		ENV_A_ATT
+		bld	EnvZeroFlg,	EnvASlope
 	L011:
 	bst	r1,		ENV_B_RST
 	brtc L012
 		sts	EnvStateB,	r3
 		sts	PhaseAccEnvB_L,	r0
 		sts	PhaseAccEnvB_H,	r2
-		cbr	EnvZeroFlg,	EnvBZero
+		cbr	EnvZeroFlg,	1<<EnvBZero
+		bst	r1,		ENV_B_ATT
+		bld	EnvZeroFlg,	EnvBSlope
 	L012:
 	sts	EnvShape,	r1
-	bst	r1,		ENV_A_ATT
-	bld	EnvZeroFlg,	EnvASlope
-	bst	r1,		ENV_B_ATT
-	bld	EnvZeroFlg,	EnvBSlope
 	rjmp AfterSPI
 
 EPLB_RegHndl:
-	ldi	YL,		7
+	ldi	YL,		7+RAMOff
 	lds	r2,		OctaveValueEnv
 	swap r2
 	rjmp L01B
@@ -948,16 +937,15 @@ EPH_RegHndl:
 		lds	r2,		IncrementEA	;__	Get raw increment
 		;	r2 = high, r0 = low, shifting right
 		clr	r0
-		clc					
 		sbrc r1,	2	;
 		rjmp L014		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;	Shift increment 4 times if needed
+			lsr r2		;	Shift increment 4 times if needed
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
 		L014:			;__
 		sbrc r1,	1	;
@@ -982,28 +970,27 @@ EPH_RegHndl:
 		lds	r2,		IncrementEB	;__	Get raw increment
 		;	r2 = high, r0 = low, shifting right
 		clr	r0
-		clc	
 		sbrc r1,	6	;
 		rjmp L018		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;	Shift increment 4 times if needed
+			lsr r2		;	Shift increment 4 times if needed
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;
 		L018:			;__
 		sbrc r1,	5	;
 		rjmp L019		;
-			ror r2		;
+			lsr r2		;
 			ror r0		;	Shift increment 2 times if needed
-			ror r2		;
+			lsr r2		;
 			ror r0		;__
 		L019:			;
 		sbrc r1,	4	;
 		rjmp L01A		;	Shift increment once more if needed
-			ror r2		;	
+			lsr r2		;	
 			ror r0		;__
 		L01A:			;	Store shifted increment
 		sts	ShiftedIncrementEB_H,	r2
@@ -1056,3 +1043,6 @@ CallTable:
 	rjmp EPLB_RegHndl
 	; 0x1F
 	rjmp EPH_RegHndl
+	; other
+	rjmp Dummy_RegHndl
+CallTableEnd:
