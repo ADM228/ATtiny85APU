@@ -281,14 +281,14 @@ void t85APU_cycle (t85APU * apu) {
 		if (r3) {
 			apu->envStates[0] += r3;
 			apu->envVolume[0] = apu->envStates[0];
-			if (!(apu->envZeroFlg & 1<<EnvASlope)) apu->envVolume[0] ^= 0xFF;
 			if (apu->envStates[0] < r3) {	// If the envelope overflowed
 				if (apu->envShape & 1<<ENV_A_ALT) apu->envZeroFlg ^= 1<<EnvASlope;
 				if (apu->envShape & 1<<ENV_A_HOLD) {
-					apu->envVolume[0] = (apu->envZeroFlg & 1<<EnvASlope) ? 0xFF : 0x00;
+					apu->envVolume[0] = 0xFF;
 					apu->envZeroFlg |= 1<<EnvAZero;
 				}
 			}
+			if (!(apu->envZeroFlg & 1<<EnvASlope)) apu->envVolume[0] ^= 0xFF;
 		}	
 	}
 	if (!(apu->envZeroFlg & 1<<EnvBZero)) {
@@ -299,14 +299,14 @@ void t85APU_cycle (t85APU * apu) {
 		if (r3) {
 			apu->envStates[1] += r3;
 			apu->envVolume[1] = apu->envStates[1];
-			if (!(apu->envZeroFlg & 1<<EnvBSlope)) apu->envVolume[1] ^= 0xFF;
 			if (apu->envStates[1] < r3) {	// If the envelope overflowed
 				if (apu->envShape & 1<<ENV_B_ALT) apu->envZeroFlg ^= 1<<EnvBSlope;
 				if (apu->envShape & 1<<ENV_B_HOLD) {
-					apu->envVolume[1] = (apu->envZeroFlg & 1<<EnvBSlope) ? 0xFF : 0x00;
+					apu->envVolume[1] = 0xFF;
 					apu->envZeroFlg |= 1<<EnvBZero;
 				}
 			}
+			if (!(apu->envZeroFlg & 1<<EnvBSlope)) apu->envVolume[1] ^= 0xFF;
 		}	
 	}
 

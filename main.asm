@@ -513,11 +513,7 @@ PhaseAccEnvUpd:
 		lds	EnvAVolume,	EnvStateA
 		add	EnvAVolume,	r3
 		sts	EnvStateA,	EnvAVolume	; doesn't affect carry
-		rol	r3	;	stores carry for later
-		sbrs EnvZeroFlg, EnvASlope
-			com	EnvAVolume
-		bst	r3,		7
-		brtc PhaseAccEnvAUpd_End
+		brcc PhaseAccEnvAUpd_End
 	PhaseAccEnvAUpd_Overflow:
 		bst r19,	ENV_A_ALT
 		brtc L00F
@@ -526,11 +522,11 @@ PhaseAccEnvUpd:
 		L00F:
 		bst r19,	ENV_A_HOLD
 		brtc PhaseAccEnvAUpd_End
-			clr	EnvAVolume
-			sbrc EnvZeroFlg, EnvASlope
-				dec	EnvAVolume
+			set	EnvAVolume
 			sbr	EnvZeroFlg,	EnvAZero
 	PhaseAccEnvAUpd_End:
+		sbrs EnvZeroFlg, EnvASlope
+			com	EnvAVolume
 	bst	EnvZeroFlg,	EnvBZero
 	brts PhaseAccEnvBUpd_End
 	PhaseAccEnvBUpd:
@@ -562,11 +558,7 @@ PhaseAccEnvUpd:
 		lds	EnvBVolume,	EnvStateA
 		add	EnvBVolume,	r3
 		sts	EnvStateA,	EnvBVolume	; doesn't affect carry
-		rol	r3	;	stores carry for later
-		sbrs EnvZeroFlg, EnvBSlope
-			com	EnvBVolume
-		bst	r3,		7
-		brtc PhaseAccEnvBUpd_End
+		brcc PhaseAccEnvBUpd_End
 	PhaseAccEnvBUpd_Overflow:
 		bst r19,	ENV_B_ALT
 		brtc L010
@@ -575,11 +567,11 @@ PhaseAccEnvUpd:
 		L010:
 		bst r19,	ENV_B_HOLD
 		brtc PhaseAccEnvBUpd_End
-			clr	EnvBVolume
-			sbrc EnvZeroFlg, EnvBSlope
-				dec	EnvBVolume
+			set	EnvBVolume
 			sbr	EnvZeroFlg,	EnvBZero
 	PhaseAccEnvBUpd_End:
+		sbrs EnvZeroFlg, EnvBSlope
+			com	EnvBVolume
 PhaseAccNoiseUpd:
 	lds	r0,		ShiftedIncrementN_L	;
 	add PhaseAccN_L,	r0			;	PhaseAcc += shifted inc value
@@ -686,17 +678,6 @@ Multiply:	; 28 cycles
 	; tmp 0:	  r3
 
 	clr r3
-
-	.if MONO
-	; 1. Multiply by 3 : 6 cycles
-	movw r0,	r16
-	clc
-	rol	r1
-	rol r2
-	add	r16,	r1
-	adc	r17,	r2
-	; r16:17 now contains the value multiplied by 3
-	.endif
 
 	movw r0,	r16	; High:Mid is now 3X, '' 00110110
 	; clc	; Never occurs within valid range
