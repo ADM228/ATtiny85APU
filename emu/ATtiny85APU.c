@@ -1,4 +1,5 @@
 #include "ATtiny85APU.h"
+#include <math.h>
 #include <tgmath.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -41,7 +42,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 
 void t85APU_reset (t85APU * apu) {
 	memset(apu->tonePhaseAccs, 	0, 	sizeof(uint16_t)*(5+1));
-	memset(apu->envVolume,		0,	sizeof(uint8_t)*(2+2));
+	memset(apu->envSmpVolume,	0,	sizeof(uint8_t)*(4));
 
 	memset(apu->dutyCycles,		0,	sizeof(uint8_t)*5);
 	memset(apu->volumes,		0,	sizeof(uint8_t)*5);
@@ -283,15 +284,15 @@ void t85APU_cycle (t85APU * apu) {
 		uint8_t r3 = (fakeAcc >> 16) & 0xFF;
 		if (r3) {
 			apu->envStates[0] += r3;
-			apu->envVolume[0] = apu->envStates[0];
+			apu->envSmpVolume[0] = apu->envStates[0];
 			if (apu->envStates[0] < r3) {	// If the envelope overflowed
 				if (apu->envShape & 1<<ENV_A_ALT) apu->envZeroFlg ^= 1<<EnvASlope;
 				if (apu->envShape & 1<<ENV_A_HOLD) {
-					apu->envVolume[0] = 0xFF;
+					apu->envSmpVolume[0] = 0xFF;
 					apu->envZeroFlg |= 1<<EnvAZero;
 				}
 			}
-			if (!(apu->envZeroFlg & 1<<EnvASlope)) apu->envVolume[0] ^= 0xFF;
+			if (!(apu->envZeroFlg & 1<<EnvASlope)) apu->envSmpVolume[0] ^= 0xFF;
 		}	
 	}
 	if (!(apu->envZeroFlg & 1<<EnvBZero)) {
@@ -301,15 +302,15 @@ void t85APU_cycle (t85APU * apu) {
 		uint8_t r3 = (fakeAcc >> 16) & 0xFF;
 		if (r3) {
 			apu->envStates[1] += r3;
-			apu->envVolume[1] = apu->envStates[1];
+			apu->envSmpVolume[1] = apu->envStates[1];
 			if (apu->envStates[1] < r3) {	// If the envelope overflowed
 				if (apu->envShape & 1<<ENV_B_ALT) apu->envZeroFlg ^= 1<<EnvBSlope;
 				if (apu->envShape & 1<<ENV_B_HOLD) {
-					apu->envVolume[1] = 0xFF;
+					apu->envSmpVolume[1] = 0xFF;
 					apu->envZeroFlg |= 1<<EnvBZero;
 				}
 			}
-			if (!(apu->envZeroFlg & 1<<EnvBSlope)) apu->envVolume[1] ^= 0xFF;
+			if (!(apu->envZeroFlg & 1<<EnvBSlope)) apu->envSmpVolume[1] ^= 0xFF;
 		}	
 	}
 
@@ -327,7 +328,7 @@ void t85APU_cycle (t85APU * apu) {
 		if (r1 & 1<<7) {
 			uint8_t r0 = apu->volumes[ch];
 			if (r1 & 1<<6) {
-				uint8_t envVol = *((uint8_t*)apu->envVolume + ((r1>>4) & 0x03));
+				uint8_t envVol = apu->envSmpVolume[(r1>>4) & 0x03];
 				if (!(r0 & 0x80)) envVol >>= 1;
 				r0 = envVol;
 			}

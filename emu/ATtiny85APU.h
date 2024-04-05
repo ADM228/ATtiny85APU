@@ -38,8 +38,7 @@ typedef struct __ATtiny85APU {
 	uint16_t tonePhaseAccs[5];
 	uint16_t noisePhaseAcc;
 
-	uint8_t envVolume[2];
-	uint8_t smpVolume[2];
+	uint8_t envSmpVolume[4];
 
 	uint8_t noiseMask;
 	uint8_t envZeroFlg;
