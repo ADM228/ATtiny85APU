@@ -62,10 +62,12 @@ typedef struct __ATtiny85APU {
 	
 	// Output
 	uint16_t channelOutput[5];
-	uint32_t currentOutput, nextOutput;
+	uint32_t currentOutput;
+	uint32_t outputQueue[3];	// Only really applies to the PWM output, [0] is current output
 } t85APU;
 
 #define T85APU_OUTPUT_PB4 0
+#define T85APU_OUTPUT_PB4_EXACT 1
 
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType);	// Automatically resets it
 void t85APU_delete (t85APU * apu);

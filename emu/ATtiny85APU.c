@@ -86,11 +86,13 @@ void t85APU_setClocknRate (t85APU * apu, double clock, double rate) {
 };
 
 static const uint_fast8_t outputTypesBitdepths[] = {
-	8	// T85APU_OUTPUT_PB4
+	8,	// T85APU_OUTPUT_PB4
+	8,	// T85APU_OUTPUT_PB4_EXACT
 };
 
 static const uint_fast16_t outputTypesDelays[] = {
-	256	// T85APU_OUTPUT_PB4, the output is changed only on the next PWM cycle after the write, i.e. 256
+	512,	// T85APU_OUTPUT_PB4, the output is changed only on the next PWM cycle after the write, i.e. 512
+	512,	// T85APU_OUTPUT_PB4_EXACT, same thing
 };
 
 void t85APU_setOutputType (t85APU * apu, uint_fast8_t outputType) {
@@ -339,7 +341,7 @@ void t85APU_cycle (t85APU * apu) {
 	for (int i = 0; i < 5; i++) {output += apu->channelOutput[i];}
 	output *= 274;	// the Multiply routine
 	output >>= 20 - (uint32_t)fmin(apu->outputBitdepth, 20);
-	apu->nextOutput = output;
+	apu->outputQueue[(511+apu->outputDelay)>>9] = output;
 }
 
 void t85APU_tick (t85APU * apu) {
@@ -347,10 +349,14 @@ void t85APU_tick (t85APU * apu) {
 		t85APU_cycle(apu);
 		apu->outPending = 1;
 	}
-	if (apu->outPending && apu->clockCycle >= apu->outputDelay) {
+	if (apu->outPending && apu->clockCycle >= (apu->outputDelay & 511)) {
 		apu->outPending = 0;
-		apu->currentOutput = apu->nextOutput;
+		apu->outputQueue[0] = apu->outputQueue[1];
+		apu->outputQueue[1] = apu->outputQueue[2];
 	}
+	if (apu->outputType == T85APU_OUTPUT_PB4_EXACT)
+		apu->currentOutput = (apu->clockCycle & 0xFF) > apu->outputQueue[0] ? 0x00 : 0xFF;
+	else apu->currentOutput = apu->outputQueue[0];
 	apu->clockCycle++;
 	apu->clockCycle &= 511;
 }
