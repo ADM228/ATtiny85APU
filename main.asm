@@ -153,8 +153,11 @@
 
 .def	NoiseMask	= r24
 .def	EnvZeroFlg	= r25
-.def	LOut_L		= r26
-.def	LOut_H		= r27
+
+.def	LOut_L		= r2
+.def	LOut_H		= r3
+.def	ROut_L		= r26
+.def	ROut_H		= r27
 
 .equ	EnvAZero	= 0
 .equ	SmpAZero	= 1
@@ -331,6 +334,8 @@ Init:
 	clr r0
 	clr r1
 	clr r16
+	clr	XH	
+	clr	YH
 	out TCCR0B,	r16	; (0<<FOC0A)|(0<<FOC0B)|\	; No force strobe
 					; (0<<WGM02)|\				; Total wavegen mode = 000 (normal)
 					; (0<<CS00)					; No clock source
@@ -386,7 +391,6 @@ Init:
 	ldi	r17,	0x0F
 
 	ldi YL,		0x67
-	clr YH
 
 	ClearOscLoop:
 		std Y+Increments-RamOff,		r0
@@ -466,8 +470,6 @@ Cycle:
 
 AfterSPI:
 	sbi PortB,	PB3
-	clr LOut_L
-	clr LOut_H
 PhaseAccEnvUpd:
 	; UP TO 46 CYCLES AAAAAAAAAAAAAAAAAAAA
 	; lds env octave (only once)
@@ -588,6 +590,12 @@ PhaseAccNoiseUpd:
 		sts NoiseLFSR+1,	r1		;__
 
 PhaseAccChAUpd:
+	clr LOut_L
+	clr LOut_H
+	
+	ldi	ZL,		RamOff
+	clr	ZH
+
 	lds	r16,	ChannelConfigA		;	Get noise mask
 	and	r16,	NoiseMask			;__
 
@@ -601,32 +609,55 @@ PhaseAccChAUpd:
 	brsh L01C						;__
 		sbr	r16,	0x80			;__
 	L01C:							;
-	clr	r0							;
-	sbrs r16,	7					;	Output 0 if nothing is output
-	rjmp Multiply					;__
-		lds	r0,		VolumeA			;
-		sbrs r16,	ENV_EN			;	If envelope/sample disabled, just put the volume
-		rjmp L01D					;__
-			mov	YL,		r16			;
-			swap YL					;	Load the envelope/sample volume
-			andi YL,	0x03		;
-			ldd	r2,	Y+20			;__
-			sbrs r0,	7			;	Shift once if volume is low
-				lsr	r2				;__
-			mov	r0,		r2			;
-		L01D:						;
-		sbrs r16,	0				;	Store the upper bit of volume
-		rjmp L01E					;
-			add	LOut_L,	r0			;
-			adc	LOut_H,	YH			;__
-		L01E:						;
-		sbrs r16,	1				;
-		rjmp Multiply				;
-			lsl	r0					;	Store the lower bit of volume
-			adc	LOut_H,	YH			;
-			add	LOut_L,	r0			;
-			adc	LOut_H,	YH			;__
-			
+	rcall	ChannelGenericRoutine
+PhaseAccChBUpd:
+	lds	r0,		ShiftedIncrementB_L	;
+	add	PhaseAccB_L,	r0			;	PhaseAcc += shifted inc value
+	lds r0,		ShiftedIncrementB_H	;
+	adc	PhaseAccB_H,	r0			;__
+
+	lds	r0,		DutyCycleB			;
+	cp	PhaseAccB_H,	r0			;	If > duty cycle, then OR it with the noise
+	brsh L020						;__
+		sbr	r16,	0x80			;__
+	L020:							;
+	rcall	ChannelGenericRoutine
+PhaseAccChCUpd:
+	lds	r0,		ShiftedIncrementC_L	;
+	add	PhaseAccC_L,	r0			;	PhaseAcc += shifted inc value
+	lds r0,		ShiftedIncrementC_H	;
+	adc	PhaseAccC_H,	r0			;__
+
+	lds	r0,		DutyCycleC			;
+	cp	PhaseAccC_H,	r0			;	If > duty cycle, then OR it with the noise
+	brsh L021						;__
+		sbr	r16,	0x80			;__
+	L021:							;
+	rcall	ChannelGenericRoutine
+PhaseAccChDUpd:
+	lds	r0,		ShiftedIncrementD_L	;
+	add	PhaseAccD_L,	r0			;	PhaseAcc += shifted inc value
+	lds r0,		ShiftedIncrementD_H	;
+	adc	PhaseAccD_H,	r0			;__
+
+	lds	r0,		DutyCycleD			;
+	cp	PhaseAccD_H,	r0			;	If > duty cycle, then OR it with the noise
+	brsh L022						;__
+		sbr	r16,	0x80			;__
+	L022:							;
+	rcall	ChannelGenericRoutine
+PhaseAccChEUpd:
+	lds	r0,		ShiftedIncrementE_L	;
+	add	PhaseAccE_L,	r0			;	PhaseAcc += shifted inc value
+	lds r0,		ShiftedIncrementE_H	;
+	adc	PhaseAccE_H,	r0			;__
+
+	lds	r0,		DutyCycleE			;
+	cp	PhaseAccE_H,	r0			;	If > duty cycle, then OR it with the noise
+	brsh L023						;__
+		sbr	r16,	0x80			;__
+	L023:							;
+	rcall	ChannelGenericRoutine
 
 Multiply:	; 27 cycles  
 	; needs 3 registers
@@ -1046,3 +1077,34 @@ CallTable:
 	; other
 	rjmp Dummy_RegHndl
 CallTableEnd:
+
+ChannelGenericRoutine:
+	sbrs r16,	7					;	Output 0 if nothing is output
+	rjmp L01F						;__
+		ldd	r0,		Z+VolumeA-RamOff;
+		sbrs r16,	ENV_EN			;	If envelope/sample disabled, just put the volume
+		rjmp L01D					;__
+			mov	YL,		r16			;
+			swap YL					;	Load the envelope/sample volume
+			andi YL,	0x03		;
+			ldd	r1,	Y+20			;__
+			sbrs r0,	7			;	Shift once if volume is low
+				lsr	r1				;__
+			mov	r0,		r1			;
+		L01D:						;
+		sbrs r16,	0				;	Store the upper bit of volume
+		rjmp L01E					;
+			add	LOut_L,	r0			;
+			adc	LOut_H,	YH			;__
+		L01E:						;
+		sbrs r16,	1				;
+		rjmp L01F					;
+			lsl	r0					;	Store the lower bit of volume
+			adc	LOut_H,	YH			;
+			add	LOut_L,	r0			;
+			adc	LOut_H,	YH			;__
+	L01F:
+		inc	ZL
+		ldd	r16,	Z+ChannelConfigA-RAMOff	;	Get noise mask
+		and	r16,	NoiseMask			;__
+	ret
