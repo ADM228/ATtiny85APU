@@ -4,3 +4,4 @@
 *.map
 *.elf
 .vscode
+bin
