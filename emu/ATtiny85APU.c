@@ -30,7 +30,10 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
 	t85APU_setClocknRate(apu, clock, rate);
 	t85APU_setOutputType(apu, outputType);
-	t85APU_setQuality(apu, apu->ticksPerClockCycle == 512.0 ? 0 : 1);
+	double tmp;
+	t85APU_setQuality(apu, 
+	 modf(log2(apu->ticksPerClockCycle), &tmp) == 0.0 && apu->ticksPerClockCycle <= 512.0
+	 ? 0 : 1);
 	t85APU_reset(apu);
 	apu->shiftRegister[0] = 0;
 	apu->ticks = 0;

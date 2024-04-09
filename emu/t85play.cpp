@@ -1,18 +1,23 @@
+#include <cmath>
 #include <cstring>
 #include <cstdint>
+#include <cwchar>
 
 #include <filesystem>
-
 #include <fstream>
+#include <ios>
 #include <iostream>
+#include <string>
 
 #include <sndfile.h>
+#include <soundio/soundio.h>
 
 #include "ATtiny85APU.h"
 #include "BitConverter.cpp"
 
 
 static const uint32_t currentFileVersion = 0x00000000;	// 16.8.8 bits semantic versioning
+static const uint32_t currentGd3Version = 0x00000100;
 
 t85APU * apu;
 
@@ -25,6 +30,17 @@ bool notchFilter = false;
 
 uint8_t outputMode;
 bool outputMethodOverride = false;
+
+// utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
+template<class Facet>
+struct deletable_facet : Facet
+{
+    template<class... Args>
+    deletable_facet(Args&&... args) : Facet(std::forward<Args>(args)...) {}
+    ~deletable_facet() {}
+};
+
+std::wstring_convert<deletable_facet<std::codecvt<char16_t, char, std::mbstate_t>>, char16_t> utf16Converter;
 
 // t85 format is VGM-inspired:
 
@@ -43,16 +59,30 @@ bool outputMethodOverride = false;
 
 */
 
-/*	Notch filter
+//	Notch filter
 
-void filter(const int *x, int *y, int n)
+static const double PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
+
+void filter(const double *x, double *y, size_t n, uint32_t smpRate)
 {
-    static float x_2 = 0.0f;                    // delayed x, y samples
-    static float x_1 = 0.0f;
-    static float y_2 = 0.0f;
-    static float y_1 = 0.0f;
+	static const double bw = 0.001;
 
-    for (int i = 0; i < n; i++)
+	const double f = 15625.f / smpRate; 
+	const double cospi2f2 = std::cos(2 * PI * f) * 2;
+	const double r = 1 - 3 * bw;
+	const double k = (double)(1 - cospi2f2*r + r*r) / (double)(2 - cospi2f2);
+
+	const double a0 = k, a2 = k;
+	const double a1 = -1*k*cospi2f2;
+	const double b1 = r*cospi2f2;
+	const double b2 = -(r*r);
+
+    static double x_2 = 0.0f;                    // delayed x, y samples
+    static double x_1 = 0.0f;
+    static double y_2 = 0.0f;
+    static double y_1 = 0.0f;
+
+    for (size_t i = 0; i < n; i++)
     {
         y[i] = a0 * x[i] + a1 * x_1 + a2 * x_2  // IIR difference equation
                          + b1 * y_1 + b2 * y_2;
@@ -63,11 +93,12 @@ void filter(const int *x, int *y, int n)
     }
 }
 
-a_0 = K
-a_1 = -2*K*cos(2*pi*f)
-a_2 = K
-b_1 = 2*R*cos(2*pi*f)
-b_2 = -(R*R)
+/*
+a0 = K
+a1 = -2*K*cos(2*pi*f)
+a2 = K
+b1 = 2*R*cos(2*pi*f)
+b2 = -(R*R)
 
 Where:
 
@@ -85,6 +116,66 @@ Sources:
 Enable it optionally, f = 15625Hz
 */
 
+// The GD3 data
+typedef struct __gd3 {
+	std::string trackNameEnglish;
+	std::string trackNameOG;
+	std::string gameNameEnglish;
+	std::string gameNameOG;
+	std::string systemNameEnglish;
+	std::string systemNameOG;
+	std::string authorNameEnglish;
+	std::string authorNameOG;
+	std::string releaseDate;
+	std::string vgmDumper;
+	std::string notes;
+} gd3;
+
+static const std::string gd3Errors[] = {
+	"",
+	"Gd3 ID does not match",
+	"Gd3 version too new",
+	"Gd3 size too small",
+	"Gd3 size outside of file bounds",
+	"Too few strings"
+};
+
+gd3 * readGd3Data(std::ifstream & file, uint32_t fileSize, uint32_t gd3Offset, int & errCode) {
+	errCode = 0;
+	file.seekg(gd3Offset, std::ios_base::beg);
+	char buffer[4];
+	file.read(buffer, 4);
+	if (memcmp(buffer, "Gd3 ", 4)) { errCode = 1; return nullptr; }
+	file.read(buffer, 4);
+	if (BitConverter::readUint32(buffer) > currentGd3Version) { errCode = 2; return nullptr; }
+	file.read(buffer, 4);
+	uint32_t gd3Size = BitConverter::readUint32(buffer);
+	if (gd3Size < 11 * 2) { errCode = 3; return nullptr; }
+	if (gd3Size + gd3Offset + 0x0C > fileSize) { errCode = 4; return nullptr; }
+	char * dataBuffer = new char[gd3Size];
+	file.read(dataBuffer, gd3Size);
+	// Check for enough spaces
+	size_t amountOfNulls = 0;
+	for (size_t i = 0; i < gd3Size>>1; i++) {
+		if (*((char16_t *)dataBuffer+i) == 0) amountOfNulls++;
+	}
+	if (amountOfNulls < 11) { errCode = 5; return nullptr; }
+
+	// Actually convert the mfs
+	gd3 * output = new gd3();
+	std::u16string bufString;
+	char16_t * currentData = (char16_t *)dataBuffer;
+
+
+	for (int i = 0; i < 11; i++) {
+		bufString = std::u16string(currentData);
+		currentData += bufString.size()+1;
+		*(((std::string *)output)+i) = utf16Converter.to_bytes(bufString);
+	}
+
+	return output;
+}
+
 int main (int argc, char** argv) {
 	std::cout << "ATtiny85APU register dump player v0.1" << std::endl << "© alexmush, 2024" << std::endl << std::endl;
 	for (int i = 1; i < argc; i++) {	// Check for the help command specifically
@@ -95,6 +186,9 @@ int main (int argc, char** argv) {
 R"(Command-line options:
 -i <input file> - specify a .t85 register dump to read from
 	= --input
+-o <output file> - specify a .wav file to output to
+	= --output
+	If not specified, the audio will be played back live
 -s <rate> - specify audio output sample rate in Hz
 	= --sample-rate
 	Default value: 44100
@@ -315,9 +409,51 @@ R"(Command-line options:
 		uint8_t outputMethod = *buffer;
 	}
 
-	
 
 	// Read GD3
+	if (gd3DataLocation) {
+		int errCode;
+
+		auto data = readGd3Data(regDumpFile, fileSize, gd3DataLocation, errCode);
+
+		if (data != nullptr && !errCode) {
+
+			if (data->trackNameEnglish.size() + data->trackNameOG.size() > 0) {
+				std::cout << "Track name: " <<
+					data->trackNameEnglish << 
+					(data->trackNameEnglish.size() && data->trackNameOG.size() ? " / " : "") <<
+					data->trackNameOG << std::endl;
+			}
+			if (data->gameNameEnglish.size() + data->gameNameOG.size() > 0) {
+				std::cout << "Game name: " <<
+					data->gameNameEnglish << 
+					(data->gameNameEnglish.size() && data->gameNameOG.size() ? " / " : "") <<
+					data->gameNameOG << std::endl;
+			}
+			if (data->systemNameEnglish.size() + data->systemNameOG.size() > 0) {
+				std::cout << "System: " <<
+					data->systemNameEnglish << 
+					(data->systemNameEnglish.size() && data->systemNameOG.size() ? " / " : "") <<
+					data->systemNameOG << std::endl;
+			}
+			if (data->authorNameEnglish.size() + data->authorNameOG.size() > 0) {
+				std::cout << "Author: " <<
+					data->authorNameEnglish << 
+					(data->authorNameEnglish.size() && data->authorNameOG.size() ? " / " : "") <<
+					data->authorNameOG << std::endl;
+			}
+			if (data->releaseDate.size())
+				std::cout << "Release date: " << data->releaseDate << std::endl;
+			if (data->vgmDumper.size())
+				std::cout << "T85 by: " << data->vgmDumper << std::endl;
+			if (data->notes.size())
+				std::cout << "Notes: \n===\n" << data->notes << "\n===" << std::endl;
+
+		} else {
+			std::cout << gd3Errors[errCode] << std::endl;
+		}
+
+	}
 
 
 	// Read the actual data

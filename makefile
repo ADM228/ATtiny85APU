@@ -15,7 +15,7 @@ flash: main.hex
 
 bin/t85play: bin bin/libt85apu.a emu/t85play.cpp
 	g++ -O2 -c emu/t85play.cpp -o bin/t85play.o
-	g++ -o bin/t85play -L bin bin/t85play.o -lt85apu -lsndfile
+	g++ -o bin/t85play -L bin bin/t85play.o -lt85apu -lsndfile -lsoundio
 
 bin:
 	mkdir bin

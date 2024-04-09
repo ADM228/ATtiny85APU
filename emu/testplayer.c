@@ -24,7 +24,6 @@ void writeShit() {
 
 int main () {
     apu = t85APU_new(8000000, 44100, T85APU_OUTPUT_PB4_EXACT);
-    t85APU_setQuality(apu, 1);
 
     file = fopen("test.raw", "wb");
 
