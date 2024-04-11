@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <cstdint>
@@ -12,6 +13,7 @@
 
 #include <sndfile.hh>
 #include <soundio/soundio.h>
+#include <thread>
 
 #include "ATtiny85APU.h"
 #include "BitConverter.cpp"
@@ -24,6 +26,7 @@ t85APU * apu;
 
 std::filesystem::path inFilePath;
 bool inFileDefined = false;
+std::ifstream regDumpFile;
 
 std::filesystem::path outFilePath;
 bool outFileDefined = false;
@@ -35,6 +38,17 @@ bool notchFilter = false;
 
 uint8_t outputMethod;
 bool outputMethodOverride = false;
+
+double ticksPerSample;
+
+double sampleTickCounter = 0.0;
+
+uint_fast16_t waitTimeCounter = 0;
+
+uint32_t regDataLocation, gd3DataLocation, loopOffset, extraHeaderOffset;
+uint32_t apuClock, totalSmpCount, loopLength;
+
+char buffer[4];
 
 std::list<uint16_t> regWrites;
 
@@ -150,7 +164,6 @@ static const std::string gd3Errors[] = {
 gd3 * readGd3Data(std::ifstream & file, uint32_t fileSize, uint32_t gd3Offset, int & errCode) {
 	errCode = 0;
 	file.seekg(gd3Offset, std::ios_base::beg);
-	char buffer[4];
 	file.read(buffer, 4);
 	if (memcmp(buffer, "Gd3 ", 4)) { errCode = 1; return nullptr; }
 	file.read(buffer, 4);
@@ -180,10 +193,14 @@ gd3 * readGd3Data(std::ifstream & file, uint32_t fileSize, uint32_t gd3Offset, i
 		*(((std::string *)output)+i) = utf16Converter.to_bytes(bufString);
 	}
 
+	delete [] dataBuffer;
+
 	return output;
 }
 
-void emulationTick(std::ifstream & file, uint32_t & totalSmpCount, uint_fast16_t & waitTimeCounter, char * buffer) {
+gd3 * gd3Data;
+
+void emulationTick(std::ifstream & file) {
 	totalSmpCount--;
 	if (waitTimeCounter) waitTimeCounter--;
 	else {
@@ -213,7 +230,54 @@ void emulationTick(std::ifstream & file, uint32_t & totalSmpCount, uint_fast16_t
 
 #pragma region libsoundioUtils
 
-
+static void write_callback(struct SoundIoOutStream *outstream, int frame_count_min, int frame_count_max) {
+    double float_sample_rate = outstream->sample_rate;
+    double seconds_per_frame = 1.0 / float_sample_rate;
+    struct SoundIoChannelArea *areas;
+    int err;
+    int frames_left = std::min(uint32_t((frame_count_max - std::ceil(apu->ticksPerClockCycle)) / ticksPerSample), totalSmpCount);
+    for (;;) {
+        int frame_count = frames_left;
+        if ((err = soundio_outstream_begin_write(outstream, &areas, &frame_count))) {
+            fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
+            exit(1);
+        }
+        if (!frame_count)
+            break;
+		
+        const struct SoundIoChannelLayout *layout = &outstream->layout;
+		
+		while (frame_count) {
+			emulationTick(regDumpFile);	// TODO: this is bs, just do a buffer
+			frame_count--;
+			sampleTickCounter += ticksPerSample;
+			while (sampleTickCounter >= 1.0) {
+				// std::cout << sampleTickCounter << "   " << regWrites.size() << std::endl;
+				sampleTickCounter -= 1.0;
+				if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
+					t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
+					std::cout << frame_count << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
+					regWrites.pop_front();
+				} 
+				uint16_t sample = (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
+				for (int channel = 0; channel < layout->channel_count; channel += 1) {
+					BitConverter::writeBytes(areas[channel].ptr, sample);
+					areas[channel].ptr += areas[channel].step;
+				}
+			}
+		}
+        if ((err = soundio_outstream_end_write(outstream))) {
+            if (err == SoundIoErrorUnderflow)
+                return;
+            fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
+            exit(1);
+        }
+        frames_left -= frame_count;
+        if (frames_left <= 0)
+            break;
+    }
+    soundio_outstream_pause(outstream, false);
+}
 
 #pragma endregion
 
@@ -350,10 +414,9 @@ R"(Command-line options:
 	}
 
 	auto expectedFileSize = std::filesystem::file_size(inFilePath);
-	std::ifstream regDumpFile (inFilePath, std::ios_base::binary|std::ios_base::in);
+	regDumpFile.open(inFilePath, std::ios_base::binary|std::ios_base::in);
 
 	// Read header
-	char buffer[4];
 	regDumpFile.read(buffer, 4);
 	if (memcmp(buffer, "t85!", 4)) {
 		std::cerr << "File header does not match" << std::endl;
@@ -390,7 +453,7 @@ R"(Command-line options:
 
 	// APU clock speed
 	regDumpFile.read(buffer, 4);
-	uint32_t apuClock = BitConverter::readUint32(buffer);
+	apuClock = BitConverter::readUint32(buffer);
 	if (apuClock == 0) {
 		std::cout << "APU Clock speed not specified, assuming 8MHz." << std::endl;
 		apuClock = 8000000;
@@ -398,7 +461,7 @@ R"(Command-line options:
 
 	// VGM data offset
 	regDumpFile.read(buffer, 4);
-	uint32_t regDataLocation = BitConverter::readUint32(buffer);
+	regDataLocation = BitConverter::readUint32(buffer);
 	if (regDataLocation) {
 		regDataLocation += 0x10;	// Offset after all
 		if (regDataLocation > fileSize) {
@@ -409,7 +472,7 @@ R"(Command-line options:
 
 	// GD3 data offset
 	regDumpFile.read(buffer, 4);
-	uint32_t gd3DataLocation = BitConverter::readUint32(buffer);
+	gd3DataLocation = BitConverter::readUint32(buffer);
 	if (gd3DataLocation) {
 		gd3DataLocation += 0x14;
 		if (regDataLocation > fileSize) {
@@ -420,13 +483,13 @@ R"(Command-line options:
 
 	// Total amount of samples
 	regDumpFile.read(buffer, 4);
-	uint32_t totalSmpCount = BitConverter::readUint32(buffer);
+	totalSmpCount = BitConverter::readUint32(buffer);
 
 	// Loop stuff
 	regDumpFile.read(buffer, 4);
-	uint32_t loopOffset = BitConverter::readUint32(buffer);
+	loopOffset = BitConverter::readUint32(buffer);
 	regDumpFile.read(buffer, 4);
-	uint32_t loopLength = BitConverter::readUint32(buffer);
+	loopLength = BitConverter::readUint32(buffer);
 	if (!loopOffset || !loopLength) {
 		loopOffset = 0; loopLength = 0;
 	} else {
@@ -442,7 +505,7 @@ R"(Command-line options:
 	
 	// Extra header
 	regDumpFile.read(buffer, 4);
-	uint32_t extraHeaderOffset = BitConverter::readUint32(buffer);
+	extraHeaderOffset = BitConverter::readUint32(buffer);
 	if (extraHeaderOffset) {
 		extraHeaderOffset += 0x24;
 		if (extraHeaderOffset > fileSize) {
@@ -462,46 +525,44 @@ R"(Command-line options:
 	if (gd3DataLocation) {
 		int errCode;
 
-		auto data = readGd3Data(regDumpFile, fileSize, gd3DataLocation, errCode);
+		gd3Data = readGd3Data(regDumpFile, fileSize, gd3DataLocation, errCode);
 
-		if (data != nullptr && !errCode) {
+		if (gd3Data != nullptr && !errCode) {
 
-			if (data->trackNameEnglish.size() + data->trackNameOG.size() > 0) {
+			if (gd3Data->trackNameEnglish.size() + gd3Data->trackNameOG.size() > 0) {
 				std::cout << "Track name: " <<
-					data->trackNameEnglish << 
-					(data->trackNameEnglish.size() && data->trackNameOG.size() ? " / " : "") <<
-					data->trackNameOG << std::endl;
+					gd3Data->trackNameEnglish << 
+					(gd3Data->trackNameEnglish.size() && gd3Data->trackNameOG.size() ? " / " : "") <<
+					gd3Data->trackNameOG << std::endl;
 			}
-			if (data->gameNameEnglish.size() + data->gameNameOG.size() > 0) {
+			if (gd3Data->gameNameEnglish.size() + gd3Data->gameNameOG.size() > 0) {
 				std::cout << "Game name: " <<
-					data->gameNameEnglish << 
-					(data->gameNameEnglish.size() && data->gameNameOG.size() ? " / " : "") <<
-					data->gameNameOG << std::endl;
+					gd3Data->gameNameEnglish << 
+					(gd3Data->gameNameEnglish.size() && gd3Data->gameNameOG.size() ? " / " : "") <<
+					gd3Data->gameNameOG << std::endl;
 			}
-			if (data->systemNameEnglish.size() + data->systemNameOG.size() > 0) {
+			if (gd3Data->systemNameEnglish.size() + gd3Data->systemNameOG.size() > 0) {
 				std::cout << "System: " <<
-					data->systemNameEnglish << 
-					(data->systemNameEnglish.size() && data->systemNameOG.size() ? " / " : "") <<
-					data->systemNameOG << std::endl;
+					gd3Data->systemNameEnglish << 
+					(gd3Data->systemNameEnglish.size() && gd3Data->systemNameOG.size() ? " / " : "") <<
+					gd3Data->systemNameOG << std::endl;
 			}
-			if (data->authorNameEnglish.size() + data->authorNameOG.size() > 0) {
+			if (gd3Data->authorNameEnglish.size() + gd3Data->authorNameOG.size() > 0) {
 				std::cout << "Author: " <<
-					data->authorNameEnglish << 
-					(data->authorNameEnglish.size() && data->authorNameOG.size() ? " / " : "") <<
-					data->authorNameOG << std::endl;
+					gd3Data->authorNameEnglish << 
+					(gd3Data->authorNameEnglish.size() && gd3Data->authorNameOG.size() ? " / " : "") <<
+					gd3Data->authorNameOG << std::endl;
 			}
-			if (data->releaseDate.size())
-				std::cout << "Release date: " << data->releaseDate << std::endl;
-			if (data->vgmDumper.size())
-				std::cout << "T85 by: " << data->vgmDumper << std::endl;
-			if (data->notes.size())
-				std::cout << "Notes: \n===\n" << data->notes << "\n===" << std::endl;
+			if (gd3Data->releaseDate.size())
+				std::cout << "Release date: " << gd3Data->releaseDate << std::endl;
+			if (gd3Data->vgmDumper.size())
+				std::cout << "T85 by: " << gd3Data->vgmDumper << std::endl;
+			if (gd3Data->notes.size())
+				std::cout << "Notes: \n===\n" << gd3Data->notes << "\n===" << std::endl;
 
 		} else {
 			std::cerr << gd3Errors[errCode] << std::endl;
 		}
-
-
 
 	}
 
@@ -517,15 +578,11 @@ R"(Command-line options:
 		std::exit(0);
 	}
 	// There actually is data, let's go emulate
-	apu = t85APU_new(apuClock, sampleRate, outputMethod); // Disable sample rate converter entirely
-	const double ticksPerSample = (double)sampleRate / 44100.0;
+	apu = t85APU_new(apuClock, sampleRate, outputMethod);
 
-	double sampleTickCounter = 0.0;
-
-	uint_fast16_t waitTimeCounter = 0;
+	ticksPerSample = (double)sampleRate / 44100.0;
 
 	regDumpFile.seekg(regDataLocation);
-
 
 	if (outFileDefined) {
 		SndfileHandle outFile(outFilePath, SFM_WRITE, SF_FORMAT_WAV|SF_FORMAT_PCM_16, 1, sampleRate);
@@ -533,7 +590,7 @@ R"(Command-line options:
 		size_t idx = 0;
 
 		while (totalSmpCount) {
-			emulationTick(regDumpFile, totalSmpCount, waitTimeCounter, buffer);
+			emulationTick(regDumpFile);
 			sampleTickCounter += ticksPerSample;
 			while (sampleTickCounter >= 1.0) {
 				// std::cout << sampleTickCounter << "   " << regWrites.size() << std::endl;
@@ -554,11 +611,71 @@ R"(Command-line options:
 
 		// outfile wil close on destruction, but the pointer won't
 		delete[] audioBuffer;
-		return 0;
 	} else {
 		// Fucking live playback
+		struct SoundIo *soundio = soundio_create();
+		soundio->app_name = "t85play v0.1";
+		if (!soundio) {
+			fprintf(stderr, "out of memory\n");
+			return 1;
+		}
+		int err = soundio_connect(soundio);
+		if (err) {
+			fprintf(stderr, "Unable to connect to backend: %s\n", soundio_strerror(err));
+			return 1;
+		}
+		fprintf(stderr, "Backend: %s\n", soundio_backend_name(soundio->current_backend));
+    	soundio_flush_events(soundio);
+		int selected_device_index = soundio_default_output_device_index(soundio);
+		if (selected_device_index < 0) {
+			fprintf(stderr, "Output device not found\n");
+			return 1;
+		}
+		struct SoundIoDevice *device = soundio_get_output_device(soundio, selected_device_index);
+		if (!device) {
+			fprintf(stderr, "out of memory\n");
+			return 1;
+		}
+		fprintf(stderr, "Output device: %s\n", device->name);
+		if (device->probe_error) {
+			fprintf(stderr, "Cannot probe device: %s\n", soundio_strerror(device->probe_error));
+			return 1;
+		}
+		struct SoundIoOutStream *outstream = soundio_outstream_create(device);
+		if (!outstream) {
+			fprintf(stderr, "out of memory\n");
+			return 1;
+		}
+		outstream->write_callback = write_callback;
+		std::string sound_name = (gd3Data->gameNameEnglish.size() ? gd3Data->gameNameEnglish : gd3Data->gameNameOG) + " : " + (gd3Data->trackNameEnglish.size() ? gd3Data->trackNameEnglish : gd3Data->trackNameOG);
+		outstream->name = sound_name.c_str();
+		outstream->software_latency = 0;
+		outstream->sample_rate = sampleRate;
+		if (soundio_device_supports_format(device, SoundIoFormatS16NE)) {
+       		outstream->format = SoundIoFormatS16NE;
+		} else {
+			fprintf(stderr, "No suitable device format available.\n");
+			return 1;
+		}
+		if ((err = soundio_outstream_open(outstream))) {
+			fprintf(stderr, "unable to open device: %s", soundio_strerror(err));
+			return 1;
+		}
+		if (outstream->layout_error)
+			fprintf(stderr, "unable to set channel layout: %s\n", soundio_strerror(outstream->layout_error));
+		if ((err = soundio_outstream_start(outstream))) {
+			fprintf(stderr, "unable to start device: %s\n", soundio_strerror(err));
+			return 1;
+		}
+		while (totalSmpCount > 0) {soundio_flush_events(soundio);}
+		soundio_outstream_destroy(outstream);
+		soundio_device_unref(device);
+		soundio_destroy(soundio);
 
 
 	}
+
+	t85APU_delete(apu);
+	return 0;
 
 }
