@@ -7,9 +7,10 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <list>
 #include <string>
 
-#include <sndfile.h>
+#include <sndfile.hh>
 #include <soundio/soundio.h>
 
 #include "ATtiny85APU.h"
@@ -21,15 +22,21 @@ static const uint32_t currentGd3Version = 0x00000100;
 
 t85APU * apu;
 
-std::filesystem::path filePath;
-bool fileDefined = false;
+std::filesystem::path inFilePath;
+bool inFileDefined = false;
+
+std::filesystem::path outFilePath;
+bool outFileDefined = false;
+
 
 uint32_t sampleRate = 44100;
 
 bool notchFilter = false;
 
-uint8_t outputMode;
+uint8_t outputMethod;
 bool outputMethodOverride = false;
+
+std::list<uint16_t> regWrites;
 
 // utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
 template<class Facet>
@@ -176,12 +183,40 @@ gd3 * readGd3Data(std::ifstream & file, uint32_t fileSize, uint32_t gd3Offset, i
 	return output;
 }
 
+void emulationTick(std::ifstream & file, uint32_t & totalSmpCount, uint_fast16_t & waitTimeCounter, char * buffer) {
+	totalSmpCount--;
+	if (waitTimeCounter) waitTimeCounter--;
+	else {
+		uint8_t cmd = file.get();
+		// std::cout << (int)cmd << std::endl;
+		switch(cmd) {
+			case 0x41:
+				file.read(buffer, 2);
+				regWrites.push_back(BitConverter::readUint16(buffer));
+				break;
+			case 0x61:
+				file.read(buffer, 2);
+				waitTimeCounter = BitConverter::readUint16(buffer)-1;
+				break;
+			case 0x62:
+				waitTimeCounter = 735-1;
+				break;
+			case 0x63:
+				waitTimeCounter = 882-1;
+				break;
+			case 0x66:
+			default:
+				break;
+		}
+	}
+}
+
 int main (int argc, char** argv) {
 	std::cout << "ATtiny85APU register dump player v0.1" << std::endl << "© alexmush, 2024" << std::endl << std::endl;
 	for (int i = 1; i < argc; i++) {	// Check for the help command specifically
 		if (!(
-			memcmp(argv[i], "-h", 2) &&
-			memcmp(argv[i], "--help", 2+4))) {
+			memcmp(argv[i], "-h", 3) &&
+			memcmp(argv[i], "--help", 2+4+1))) {
                   std::cout << 
 R"(Command-line options:
 -i <input file> - specify a .t85 register dump to read from
@@ -212,42 +247,62 @@ R"(Command-line options:
 	}
 	for (int i = 1; i < argc; i++) {
 		if (! (
-			memcmp(argv[i], "-i", 2) && 
-			memcmp(argv[i], "--input", 7))) {
-			if (fileDefined) {
-				std::cout << "Cannot input more than 1 file at once" << std::endl;
+			memcmp(argv[i], "-i", 3) && 
+			memcmp(argv[i], "--input", 8))) {
+			if (inFileDefined) {
+				std::cerr << "Cannot input more than 1 file at once" << std::endl;
 			} else if (i+1 >= argc) {
-				std::cout << "File argument not supplied" << std::endl;
+				std::cerr << "File argument not supplied" << std::endl;
 			} else if (argv[i+1][0] == char("-"[0])){
-				std::cout << "Invalid file argument: \"" << argv[i+1] << "\"" << std::endl;
+				std::cerr << "Invalid file argument: \"" << argv[i+1] << "\"" << std::endl;
+				i--;
 			} else {
-				filePath = std::filesystem::path(argv[i+1]);
-				if (!std::filesystem::exists(filePath)) {
-					std::cout << "File \"" << argv[i+1] << "\" does not exist" << std::endl;
+				inFilePath = std::filesystem::path(argv[i+1]);
+				if (!std::filesystem::exists(inFilePath)) {
+					std::cerr << "File \"" << argv[i+1] << "\" does not exist" << std::endl;
 				} else {
-					fileDefined = true;
+					inFileDefined = true;
+				}
+			}
+			i++;
+		} else if (! (
+			memcmp(argv[i], "-o", 3) && 
+			memcmp(argv[i], "--output", 9))) {
+			if (outFileDefined) {
+				std::cerr << "Cannot output to more than 1 file at once" << std::endl;
+			} else if (i+1 >= argc) {
+				std::cerr << "File argument not supplied" << std::endl;
+			} else if (argv[i+1][0] == char("-"[0])){
+				std::cerr << "Invalid file argument: \"" << argv[i+1] << "\"" << std::endl;
+				i--;
+			} else {
+				outFilePath = std::filesystem::path(argv[i+1]);
+				if (std::filesystem::exists(outFilePath.parent_path())) {
+					std::cerr << "Directory \"" << outFilePath.parent_path() << "\" does not exist" << std::endl;
+				} else {
+					outFileDefined = true;
 				}
 			}
 			i++;
 		} else if (!(
 			memcmp(argv[i], "-s", 3) && 
-			memcmp(argv[i], "--sample-rate", 2+6+1+4))) {
+			memcmp(argv[i], "--sample-rate", 2+6+1+4+1))) {
 			// Sample rate
 			if (i+1 >= argc) {
-				std::cout << "Sample rate argument not supplied" << std::endl;
+				std::cerr << "Sample rate argument not supplied" << std::endl;
 			} else {
 				char* p;
 				auto tmp = strtol(argv[i+1], &p, 10);
 				if (*p) {
-					std::cout << "Invalid sample rate argument: \"" << argv[i+1] << "\"" << std::endl;
+					std::cerr << "Invalid sample rate argument: \"" << argv[i+1] << "\"" << std::endl;
 				} else {
 					sampleRate = tmp;
 				}
 			}
 			i++;
 		} else if (!(
-			memcmp(argv[i], "-om", 3) &&
-			memcmp(argv[i], "--output-method", 2+6+1+6))) {
+			memcmp(argv[i], "-om", 4) &&
+			memcmp(argv[i], "--output-method", 2+6+1+6+1))) {
 			// Override output mode
 			if (i+1 >= argc) {
 				std::cout << "Output method argument not supplied" << std::endl;
@@ -255,46 +310,46 @@ R"(Command-line options:
 				char* p;
 				auto tmp = strtol(argv[i+1], &p, 10);
 				if (*p) {
-					std::cout << "Invalid output method argument: \"" << argv[i+1] << "\"" << std::endl;
+					std::cerr << "Invalid output method argument: \"" << argv[i+1] << "\"" << std::endl;
 				} else {
-					outputMode = tmp;
+					outputMethod = tmp;
 					outputMethodOverride = true;
 				}
 			}
 			i++;
 		} else if (!(
-			memcmp(argv[i], "-f", 2) && 
-			memcmp(argv[i], "--filter", 2+6))) {
+			memcmp(argv[i], "-f", 3) && 
+			memcmp(argv[i], "--filter", 2+6+1))) {
 			// Enable notch filter
 			notchFilter = true;
 		} else if (!(
 			memcmp(argv[i], "-nf", 3) && 
-			memcmp(argv[i], "--no-filter", 2+2+1+6))) {
+			memcmp(argv[i], "--no-filter", 2+2+1+6+1))) {
 			// Disable notch filter
 			notchFilter = false;
 		}
 	}
-	if (!fileDefined) {
+	if (!inFileDefined) {
 		std::string filename;
 		std::cout << "\tPlease input register dump file name: ";
 		std::cin >> filename;
-		filePath = std::filesystem::path(filename);
-		if (!std::filesystem::exists(filePath)) {
-			std::cout << "File \"" << filename << "\" does not exist" << std::endl;
+		inFilePath = std::filesystem::path(filename);
+		if (!std::filesystem::exists(inFilePath)) {
+			std::cerr << "File \"" << filename << "\" does not exist" << std::endl;
 			std::exit(1);
 		} else {
-			fileDefined = true;
+			inFileDefined = true;
 		}
 	}
 
-	auto expectedFileSize = std::filesystem::file_size(filePath);
-	std::ifstream regDumpFile (filePath);
+	auto expectedFileSize = std::filesystem::file_size(inFilePath);
+	std::ifstream regDumpFile (inFilePath, std::ios_base::binary|std::ios_base::in);
 
 	// Read header
 	char buffer[4];
 	regDumpFile.read(buffer, 4);
 	if (memcmp(buffer, "t85!", 4)) {
-		std::cout << "File header does not match" << std::endl;
+		std::cerr << "File header does not match" << std::endl;
 		std::exit(2);
 	}
 
@@ -302,13 +357,13 @@ R"(Command-line options:
 	regDumpFile.read(buffer, 4);
 	uint32_t fileSize = BitConverter::readUint32(buffer) + 0x04;
 	if (fileSize > expectedFileSize) {
-		std::cout << "File seems to be cut off by " << fileSize - expectedFileSize << " bytes. " << std::endl;
+		std::cerr << "File seems to be cut off by " << fileSize - expectedFileSize << " bytes. " << std::endl;
 		std::exit(3);
 	} else if (fileSize < expectedFileSize) {
-		std::cout << "File seems to contain " << expectedFileSize - fileSize << " extra bytes of data. " << std::endl;
+		std::cerr << "File seems to contain " << expectedFileSize - fileSize << " extra bytes of data. " << std::endl;
 	}
 	if (fileSize < 0x2C) {
-		std::cout << "File is too small for the t85 header" << std::endl;
+		std::cerr << "File is too small for the t85 header" << std::endl;
 		std::exit(2);
 	}
 
@@ -316,7 +371,7 @@ R"(Command-line options:
 	regDumpFile.read(buffer, 4);
 	uint32_t fileVersion = BitConverter::readUint32(buffer);
 	if (fileVersion > currentFileVersion) {
-		std::cout << "File version (" << 
+		std::cerr << "File version (" << 
 			(fileVersion>>16) << "." << 
 			((fileVersion>>8) & 0xFF) << "." << 
 			(fileVersion & 0xFF) << ") is newer than the player's maximum supported file version (" << 
@@ -337,37 +392,28 @@ R"(Command-line options:
 	// VGM data offset
 	regDumpFile.read(buffer, 4);
 	uint32_t regDataLocation = BitConverter::readUint32(buffer);
-	if (regDataLocation == 0) {
-		std::cout << "This file contains no register dump data." << std::endl;
-	} else {
+	if (regDataLocation) {
 		regDataLocation += 0x10;	// Offset after all
 		if (regDataLocation > fileSize) {
 			regDataLocation = 0;
-			std::cout << "Register dump pointer out of bounds." << std::endl;
+			std::cerr << "Register dump pointer out of bounds." << std::endl;
 		}
 	}
 
 	// GD3 data offset
 	regDumpFile.read(buffer, 4);
 	uint32_t gd3DataLocation = BitConverter::readUint32(buffer);
-	if (gd3DataLocation == 0) {
-		std::cout << "This file contains no GD3 data." << std::endl;
-	} else {
+	if (gd3DataLocation) {
 		gd3DataLocation += 0x14;
 		if (regDataLocation > fileSize) {
 			gd3DataLocation = 0;
-			std::cout << "GD3 pointer out of bounds." << std::endl;
+			std::cerr << "GD3 pointer out of bounds." << std::endl;
 		}
 	}
 
 	// Total amount of samples
 	regDumpFile.read(buffer, 4);
 	uint32_t totalSmpCount = BitConverter::readUint32(buffer);
-	if (totalSmpCount == 0) {
-		std::cout << "This file specifies its length as 0." << std::endl;
-	} else {
-		std::cout << "This file is " << totalSmpCount << " samples long, that's " << totalSmpCount / 44100.0 << " seconds." << std::endl;
-	}
 
 	// Loop stuff
 	regDumpFile.read(buffer, 4);
@@ -376,37 +422,32 @@ R"(Command-line options:
 	uint32_t loopLength = BitConverter::readUint32(buffer);
 	if (!loopOffset || !loopLength) {
 		loopOffset = 0; loopLength = 0;
-		std::cout << "No loop" << std::endl;
 	} else {
 		loopOffset += 0x1C;
 		if (loopOffset > fileSize) {
 			loopOffset = 0; loopLength = 0;
-			std::cout << "Loop pointer out of bounds, treating as no loop." << std::endl;
+			std::cerr << "Loop pointer out of bounds, treating as no loop." << std::endl;
 		} else if (loopLength > totalSmpCount) {
 			loopOffset = 0; loopLength = 0;
-			std::cout << "Loop length out of bounds, treating as no loop." << std::endl;
-		} else {
-			std::cout << "Looped validly" << std::endl;
+			std::cerr << "Loop length out of bounds, treating as no loop." << std::endl;
 		}
 	}
 	
 	// Extra header
 	regDumpFile.read(buffer, 4);
 	uint32_t extraHeaderOffset = BitConverter::readUint32(buffer);
-	if (!extraHeaderOffset) {
-		std::cout << "No extra header" << std::endl;
-	} else {
+	if (extraHeaderOffset) {
 		extraHeaderOffset += 0x24;
 		if (extraHeaderOffset > fileSize) {
 			extraHeaderOffset = 0;
-			std::cout << "Extra header pointer out of bounds." << std::endl;
+			std::cerr << "Extra header pointer out of bounds." << std::endl;
 		}
 	}
 
 	// Output method
 	regDumpFile.read(buffer, 1);
 	if (!outputMethodOverride) {
-		uint8_t outputMethod = *buffer;
+		outputMethod = *buffer;
 	}
 
 
@@ -450,11 +491,63 @@ R"(Command-line options:
 				std::cout << "Notes: \n===\n" << data->notes << "\n===" << std::endl;
 
 		} else {
-			std::cout << gd3Errors[errCode] << std::endl;
+			std::cerr << gd3Errors[errCode] << std::endl;
 		}
+
+
 
 	}
 
+	// Extra header (TODO)
 
 	// Read the actual data
+
+	if (!totalSmpCount) {
+		std::cerr << "This file specifies its length as 0." << std::endl;
+		std::exit(0);
+	} else if (!regDataLocation) {
+		std::cerr << "This file contains no register dump data." << std::endl;
+		std::exit(0);
+	}
+	// There actually is data, let's go emulate
+	apu = t85APU_new(apuClock, sampleRate, outputMethod); // Disable sample rate converter entirely
+	const double ticksPerSample = (double)sampleRate / 44100.0;
+
+	double sampleTickCounter = 0.0;
+
+	uint_fast16_t waitTimeCounter = 0;
+
+	regDumpFile.seekg(regDataLocation);
+
+
+	if (outFileDefined) {
+		SndfileHandle outFile(outFilePath, SFM_WRITE, SF_FORMAT_WAV|SF_FORMAT_PCM_16, 1, sampleRate);
+		auto audioBuffer = new uint16_t[sampleRate]; 
+		size_t idx = 0;
+
+		while (totalSmpCount) {
+			emulationTick(regDumpFile, totalSmpCount, waitTimeCounter, buffer);
+			sampleTickCounter += ticksPerSample;
+			while (sampleTickCounter >= 1.0) {
+				// std::cout << sampleTickCounter << "   " << regWrites.size() << std::endl;
+				sampleTickCounter -= 1.0;
+				if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
+					t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
+					std::cout << totalSmpCount << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
+					regWrites.pop_front();
+				} 
+				BitConverter::writeBytes(audioBuffer+(idx++), (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth)));
+				if (idx >= sampleRate) {
+					idx = 0;
+					outFile.write((short *)audioBuffer, sampleRate);
+				}
+			}
+		} 
+		if (idx) outFile.write((short *)audioBuffer, idx);
+
+		// outfile wil close on destruction, but the pointer won't
+		delete[] audioBuffer;
+		return 0;
+	}
+
 }

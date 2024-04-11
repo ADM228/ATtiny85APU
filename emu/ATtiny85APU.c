@@ -375,7 +375,8 @@ uint32_t t85APU_calc(t85APU *apu) {
 		if (apu->quality >= 1 && totalSize > 0) array[i] = apu->currentOutput;
 	}
 	double totalOutput = 0;
-	apu->ticks -= floor(apu->ticks);
+	double tmp;
+	apu->ticks = modf(apu->ticks, &tmp);
 	switch (apu->quality) {
 		case 1:
 			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)array[i];
