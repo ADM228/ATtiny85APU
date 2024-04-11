@@ -59,6 +59,7 @@ typedef struct __ATtiny85APU {
 	double ticks;	// Reset when updated to keep precision
 	uint_fast8_t quality;	// 0 - no interpolation/alialising, 1 - averaging of outputs per sample
 	bool outPending;
+	uint32_t * resamplingBuffer;
 	
 	// Output
 	uint16_t channelOutput[5];

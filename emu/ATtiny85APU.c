@@ -28,6 +28,7 @@
 
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
+	apu->resamplingBuffer = calloc(1, sizeof(uint32_t));	// Just to not make it screw up at the actual allocation
 	t85APU_setClocknRate(apu, clock, rate);
 	t85APU_setOutputType(apu, outputType);
 	double tmp;
@@ -86,6 +87,8 @@ void t85APU_setClocknRate (t85APU * apu, double clock, double rate) {
 	if (!rate)	rate = clock / 512;
 
 	apu->ticksPerClockCycle = clock / rate; 
+
+	apu->resamplingBuffer = realloc(apu->resamplingBuffer, ceil(apu->ticksPerClockCycle) * sizeof(uint32_t));
 };
 
 static const uint_fast8_t outputTypesBitdepths[] = {
@@ -367,19 +370,17 @@ void t85APU_tick (t85APU * apu) {
 uint32_t t85APU_calc(t85APU *apu) {
 	apu->ticks += apu->ticksPerClockCycle;
 	uint32_t output;
-	uint32_t * array;
 	size_t totalSize = floor(apu->ticks);
-	if (apu->quality >= 1 && totalSize > 0) array = (uint32_t *) calloc(totalSize, sizeof(uint32_t)); 
 	for (size_t i = 0; i < totalSize; i++) {
 		t85APU_tick (apu);
-		if (apu->quality >= 1 && totalSize > 0) array[i] = apu->currentOutput;
+		if (apu->quality >= 1 && totalSize > 0) apu->resamplingBuffer[i] = apu->currentOutput;
 	}
 	double totalOutput = 0;
 	double tmp;
 	apu->ticks = modf(apu->ticks, &tmp);
 	switch (apu->quality) {
 		case 1:
-			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)array[i];
+			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)apu->resamplingBuffer[i];
 			totalOutput /= (totalSize + 1);
 			output = (uint32_t)totalOutput;
 			break;
@@ -388,6 +389,5 @@ uint32_t t85APU_calc(t85APU *apu) {
 			output = apu->currentOutput;
 			break;
 	}
-	if (apu->quality >= 1 && totalSize > 0) free(array);
 	return output;
 }

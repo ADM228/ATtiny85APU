@@ -28,8 +28,8 @@ bool inFileDefined = false;
 std::filesystem::path outFilePath;
 bool outFileDefined = false;
 
-
 uint32_t sampleRate = 44100;
+bool sampleRateDefined = false;
 
 bool notchFilter = false;
 
@@ -211,6 +211,12 @@ void emulationTick(std::ifstream & file, uint32_t & totalSmpCount, uint_fast16_t
 	}
 }
 
+#pragma region libsoundioUtils
+
+
+
+#pragma endregion
+
 int main (int argc, char** argv) {
 	std::cout << "ATtiny85APU register dump player v0.1" << std::endl << "© alexmush, 2024" << std::endl << std::endl;
 	for (int i = 1; i < argc; i++) {	// Check for the help command specifically
@@ -297,6 +303,7 @@ R"(Command-line options:
 					std::cerr << "Invalid sample rate argument: \"" << argv[i+1] << "\"" << std::endl;
 				} else {
 					sampleRate = tmp;
+					sampleRateDefined = true;
 				}
 			}
 			i++;
@@ -548,6 +555,10 @@ R"(Command-line options:
 		// outfile wil close on destruction, but the pointer won't
 		delete[] audioBuffer;
 		return 0;
+	} else {
+		// Fucking live playback
+
+
 	}
 
 }
