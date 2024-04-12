@@ -50,6 +50,8 @@ uint32_t apuClock, totalSmpCount, loopLength;
 
 char buffer[4];
 
+bool ended = false;
+
 std::list<uint16_t> regWrites;
 
 // utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
@@ -231,36 +233,37 @@ void emulationTick(std::ifstream & file) {
 #pragma region libsoundioUtils
 
 static void write_callback(struct SoundIoOutStream *outstream, int frame_count_min, int frame_count_max) {
-    double float_sample_rate = outstream->sample_rate;
-    double seconds_per_frame = 1.0 / float_sample_rate;
+	// std::cout << "wcall" << std::endl;
     struct SoundIoChannelArea *areas;
     int err;
-    int frames_left = std::min(uint32_t((frame_count_max - std::ceil(apu->ticksPerClockCycle)) / ticksPerSample), totalSmpCount);
+    int frames_left = std::max(std::min(int32_t((frame_count_max / ticksPerSample) - 1), (int32_t)totalSmpCount), (int32_t)frame_count_min);
+	// std::cout << frames_left << " " << totalSmpCount << " " << frame_count_max << std::endl;
+	if (!frames_left) {ended = true; return;}
     for (;;) {
-        int frame_count = frames_left;
-        if ((err = soundio_outstream_begin_write(outstream, &areas, &frame_count))) {
+        if ((err = soundio_outstream_begin_write(outstream, &areas, &frames_left))) {
             fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
             exit(1);
         }
+		int frame_count = frames_left;
+
         if (!frame_count)
             break;
 		
         const struct SoundIoChannelLayout *layout = &outstream->layout;
 		
-		while (frame_count) {
+		for (uint32_t frame = 0; frame < frame_count; frame++) {
 			emulationTick(regDumpFile);	// TODO: this is bs, just do a buffer
-			frame_count--;
 			sampleTickCounter += ticksPerSample;
 			while (sampleTickCounter >= 1.0) {
-				// std::cout << sampleTickCounter << "   " << regWrites.size() << std::endl;
+				// std::cout << sampleTickCounter << "  " << regWrites.size() << std::endl;
 				sampleTickCounter -= 1.0;
 				if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
 					t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
-					std::cout << frame_count << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
+					// std::cout << frames_left << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
 					regWrites.pop_front();
 				} 
 				uint16_t sample = (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
-				for (int channel = 0; channel < layout->channel_count; channel += 1) {
+				for (int channel = 0; channel < layout->channel_count; channel++) {
 					BitConverter::writeBytes(areas[channel].ptr, sample);
 					areas[channel].ptr += areas[channel].step;
 				}
@@ -272,11 +275,16 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
             fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
             exit(1);
         }
-        frames_left -= frame_count;
+		frames_left -= frame_count;
         if (frames_left <= 0)
             break;
     }
     soundio_outstream_pause(outstream, false);
+}
+
+void underflow_callback(struct SoundIoOutStream *outstream) {
+	static int count = 0;
+	std::cerr << "Underflow #" << count++ << std::endl;
 }
 
 #pragma endregion
@@ -614,11 +622,11 @@ R"(Command-line options:
 	} else {
 		// Fucking live playback
 		struct SoundIo *soundio = soundio_create();
-		soundio->app_name = "t85play v0.1";
 		if (!soundio) {
 			fprintf(stderr, "out of memory\n");
 			return 1;
 		}
+		soundio->app_name = "t85play v0.1";
 		int err = soundio_connect(soundio);
 		if (err) {
 			fprintf(stderr, "Unable to connect to backend: %s\n", soundio_strerror(err));
@@ -649,7 +657,6 @@ R"(Command-line options:
 		outstream->write_callback = write_callback;
 		std::string sound_name = (gd3Data->gameNameEnglish.size() ? gd3Data->gameNameEnglish : gd3Data->gameNameOG) + " : " + (gd3Data->trackNameEnglish.size() ? gd3Data->trackNameEnglish : gd3Data->trackNameOG);
 		outstream->name = sound_name.c_str();
-		outstream->software_latency = 0;
 		outstream->sample_rate = sampleRate;
 		if (soundio_device_supports_format(device, SoundIoFormatS16NE)) {
        		outstream->format = SoundIoFormatS16NE;
@@ -667,7 +674,10 @@ R"(Command-line options:
 			fprintf(stderr, "unable to start device: %s\n", soundio_strerror(err));
 			return 1;
 		}
-		while (totalSmpCount > 0) {soundio_flush_events(soundio);}
+		static uint64_t invoked = 0;
+		// while (!ended) {soundio_flush_events(soundio);}
+		// std::this_thread::sleep_for(std::chrono::seconds(6));
+		while (getc(stdin) != "q"[0]) {}
 		soundio_outstream_destroy(outstream);
 		soundio_device_unref(device);
 		soundio_destroy(soundio);
