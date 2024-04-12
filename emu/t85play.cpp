@@ -1,5 +1,5 @@
-#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <cstdint>
 #include <cwchar>
@@ -13,7 +13,6 @@
 
 #include <sndfile.hh>
 #include <soundio/soundio.h>
-#include <thread>
 
 #include "ATtiny85APU.h"
 #include "BitConverter.cpp"
@@ -233,12 +232,13 @@ void emulationTick(std::ifstream & file) {
 #pragma region libsoundioUtils
 
 static void write_callback(struct SoundIoOutStream *outstream, int frame_count_min, int frame_count_max) {
-	// std::cout << "wcall" << std::endl;
+	std::cout << "wcall" << std::endl;
+	fflush(stdout);
     struct SoundIoChannelArea *areas;
     int err;
-    int frames_left = std::max(std::min(int32_t((frame_count_max / ticksPerSample) - 1), (int32_t)totalSmpCount), (int32_t)frame_count_min);
-	// std::cout << frames_left << " " << totalSmpCount << " " << frame_count_max << std::endl;
-	if (!frames_left) {ended = true; return;}
+	// if (!totalSmpCount) {ended = true; return;}
+    int frames_left = frame_count_max;
+	std::cout << frames_left << " " << totalSmpCount << " " << frame_count_max << std::endl;
     for (;;) {
         if ((err = soundio_outstream_begin_write(outstream, &areas, &frames_left))) {
             fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
@@ -251,27 +251,29 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
 		
         const struct SoundIoChannelLayout *layout = &outstream->layout;
 		
-		for (uint32_t frame = 0; frame < frame_count; frame++) {
-			emulationTick(regDumpFile);	// TODO: this is bs, just do a buffer
-			sampleTickCounter += ticksPerSample;
-			while (sampleTickCounter >= 1.0) {
-				// std::cout << sampleTickCounter << "  " << regWrites.size() << std::endl;
-				sampleTickCounter -= 1.0;
-				if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
-					t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
-					// std::cout << frames_left << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
-					regWrites.pop_front();
-				} 
-				uint16_t sample = (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
-				for (int channel = 0; channel < layout->channel_count; channel++) {
-					BitConverter::writeBytes(areas[channel].ptr, sample);
-					areas[channel].ptr += areas[channel].step;
+		for (uint32_t frame = frame_count; frame != 0; frame--) {
+			if (totalSmpCount) {
+				sampleTickCounter += ticksPerSample;
+				while (sampleTickCounter >= 1.0) {
+					sampleTickCounter -= 1.0;
+					emulationTick(regDumpFile);	// TODO: this is bs, just do a buffer
 				}
+			}
+			// std::cout << sampleTickCounter << "  " << regWrites.size() << std::endl;
+			if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
+				t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
+				std::cout << frames_left << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
+				regWrites.pop_front();
+			} 
+			uint16_t sample = (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
+			for (int channel = 0; channel < layout->channel_count; channel++) {
+				BitConverter::writeBytes(areas[channel].ptr, sample);
+				areas[channel].ptr += areas[channel].step;
 			}
 		}
         if ((err = soundio_outstream_end_write(outstream))) {
             if (err == SoundIoErrorUnderflow)
-                return;
+                continue;
             fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
             exit(1);
         }
@@ -279,7 +281,6 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
         if (frames_left <= 0)
             break;
     }
-    soundio_outstream_pause(outstream, false);
 }
 
 void underflow_callback(struct SoundIoOutStream *outstream) {
@@ -588,11 +589,10 @@ R"(Command-line options:
 	// There actually is data, let's go emulate
 	apu = t85APU_new(apuClock, sampleRate, outputMethod);
 
-	ticksPerSample = (double)sampleRate / 44100.0;
-
 	regDumpFile.seekg(regDataLocation);
 
 	if (outFileDefined) {
+		ticksPerSample = (double)sampleRate / 44100.0;
 		SndfileHandle outFile(outFilePath, SFM_WRITE, SF_FORMAT_WAV|SF_FORMAT_PCM_16, 1, sampleRate);
 		auto audioBuffer = new uint16_t[sampleRate]; 
 		size_t idx = 0;
@@ -620,6 +620,7 @@ R"(Command-line options:
 		// outfile wil close on destruction, but the pointer won't
 		delete[] audioBuffer;
 	} else {
+		ticksPerSample =  44100.0 / (double)sampleRate;
 		// Fucking live playback
 		struct SoundIo *soundio = soundio_create();
 		if (!soundio) {
