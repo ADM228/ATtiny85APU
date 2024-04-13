@@ -1,4 +1,3 @@
-#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
@@ -16,6 +15,7 @@
 
 #include "ATtiny85APU.h"
 #include "BitConverter.cpp"
+#include "NotchFilter.cpp"
 
 
 static const uint32_t currentFileVersion = 0x00000000;	// 16.8.8 bits semantic versioning
@@ -33,7 +33,8 @@ bool outFileDefined = false;
 uint32_t sampleRate = 44100;
 bool sampleRateDefined = false;
 
-bool notchFilter = false;
+BandFilter::BandFilter notchFilter;
+bool notchFilterEnabled = false;
 
 uint8_t outputMethod;
 bool outputMethodOverride = false;
@@ -77,66 +78,8 @@ std::wstring_convert<deletable_facet<std::codecvt<char16_t, char, std::mbstate_t
 	|  0x28	|OutMthd|	**   RESERVED   **	|_______________________________|
 	|_______|_______________________________|
 
-
-
 */
 
-//	Notch filter
-
-static const double PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
-
-void filter(const double *x, double *y, size_t n, uint32_t smpRate)
-{
-	static const double bw = 0.001;
-
-	const double f = 15625.f / smpRate; 
-	const double cospi2f2 = std::cos(2 * PI * f) * 2;
-	const double r = 1 - 3 * bw;
-	const double k = (double)(1 - cospi2f2*r + r*r) / (double)(2 - cospi2f2);
-
-	const double a0 = k, a2 = k;
-	const double a1 = -1*k*cospi2f2;
-	const double b1 = r*cospi2f2;
-	const double b2 = -(r*r);
-
-    static double x_2 = 0.0f;                    // delayed x, y samples
-    static double x_1 = 0.0f;
-    static double y_2 = 0.0f;
-    static double y_1 = 0.0f;
-
-    for (size_t i = 0; i < n; i++)
-    {
-        y[i] = a0 * x[i] + a1 * x_1 + a2 * x_2  // IIR difference equation
-                         + b1 * y_1 + b2 * y_2;
-        x_2 = x_1;                              // shift delayed x, y samples
-        x_1 = x[i];
-        y_2 = y_1;
-        y_1 = y[i];
-    }
-}
-
-/*
-a0 = K
-a1 = -2*K*cos(2*pi*f)
-a2 = K
-b1 = 2*R*cos(2*pi*f)
-b2 = -(R*R)
-
-Where:
-
-K = (1 - 2*R*cos(2*pi*f) + R*R) / (2 - 2*cos(2*pi*f))
-R = 1 - 3BW
-
-f = center freq
-BW = bandwidth (≥ 0.0003 recommended)
-Both expressed as a multiple of the sample rate (must be > 0 && ≤ 0.5)
-
-Sources: 
-1. https://dsp.stackexchange.com/questions/11290/linear-phase-notch-filter-band-reject-filter-implementation-in-c
-2. https://dspguide.com/ch19/3.htm
-
-Enable it optionally, f = 15625Hz
-*/
 
 // The GD3 data
 typedef struct __gd3 {
@@ -232,13 +175,13 @@ void emulationTick(std::ifstream & file) {
 #pragma region libsoundioUtils
 
 static void write_callback(struct SoundIoOutStream *outstream, int frame_count_min, int frame_count_max) {
-	std::cout << "wcall" << std::endl;
+	// std::cout << "wcall" << std::endl;
 	fflush(stdout);
     struct SoundIoChannelArea *areas;
     int err;
 	// if (!totalSmpCount) {ended = true; return;}
     int frames_left = frame_count_max;
-	std::cout << frames_left << " " << totalSmpCount << " " << frame_count_max << std::endl;
+	// std::cout << frames_left << " " << totalSmpCount << " " << frame_count_max << std::endl;
     for (;;) {
         if ((err = soundio_outstream_begin_write(outstream, &areas, &frames_left))) {
             fprintf(stderr, "unrecoverable stream error: %s\n", soundio_strerror(err));
@@ -262,12 +205,14 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
 			// std::cout << sampleTickCounter << "  " << regWrites.size() << std::endl;
 			if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
 				t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
-				std::cout << frames_left << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
+				// std::cout << frames_left << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
 				regWrites.pop_front();
 			} 
-			uint16_t sample = (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
+			int16_t sample = (int16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
+			sample -= 1<<14;
+			if (notchFilterEnabled) sample = filterSingle(notchFilter, sample);
 			for (int channel = 0; channel < layout->channel_count; channel++) {
-				BitConverter::writeBytes(areas[channel].ptr, sample);
+				BitConverter::writeBytes(areas[channel].ptr, (uint16_t)sample);
 				areas[channel].ptr += areas[channel].step;
 			}
 		}
@@ -401,12 +346,12 @@ R"(Command-line options:
 			memcmp(argv[i], "-f", 3) && 
 			memcmp(argv[i], "--filter", 2+6+1))) {
 			// Enable notch filter
-			notchFilter = true;
+			notchFilterEnabled = true;
 		} else if (!(
 			memcmp(argv[i], "-nf", 3) && 
 			memcmp(argv[i], "--no-filter", 2+2+1+6+1))) {
 			// Disable notch filter
-			notchFilter = false;
+			notchFilterEnabled = false;
 		}
 	}
 	if (!inFileDefined) {
@@ -591,10 +536,18 @@ R"(Command-line options:
 
 	regDumpFile.seekg(regDataLocation);
 
+	if (notchFilterEnabled) notchFilterEnabled = sampleRate >= apuClock/256.0;
+	if (notchFilterEnabled) {
+		setNotchFilterParams(notchFilter, (double)sampleRate, apuClock/512.0, 0.01);
+		// Figure out the harmonics??????? it gives out 12850Hz and 18400Hz noises at 44100Hz, wtf 
+		// setNotchFilterParams(notchFilter, (double)sampleRate, 12850, 0.01);
+		resetFilter(notchFilter);
+	}
+
 	if (outFileDefined) {
 		ticksPerSample = (double)sampleRate / 44100.0;
 		SndfileHandle outFile(outFilePath, SFM_WRITE, SF_FORMAT_WAV|SF_FORMAT_PCM_16, 1, sampleRate);
-		auto audioBuffer = new uint16_t[sampleRate]; 
+		auto audioBuffer = new int16_t[sampleRate]; 
 		size_t idx = 0;
 
 		while (totalSmpCount) {
@@ -608,15 +561,18 @@ R"(Command-line options:
 					std::cout << totalSmpCount << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
 					regWrites.pop_front();
 				} 
-				BitConverter::writeBytes(audioBuffer+(idx++), (uint16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth)));
+				BitConverter::writeBytes(audioBuffer+(idx++), (uint16_t)((t85APU_calc(apu)<<(15-apu->outputBitdepth)) - (1<<14)));
 				if (idx >= sampleRate) {
+					if (notchFilterEnabled) BandFilter::filterBuffer(notchFilter, audioBuffer, sampleRate);
 					idx = 0;
-					outFile.write((short *)audioBuffer, sampleRate);
+					outFile.write(audioBuffer, sampleRate);
 				}
 			}
 		} 
-		if (idx) outFile.write((short *)audioBuffer, idx);
-
+		if (idx) {
+			if (notchFilterEnabled) BandFilter::filterBuffer(notchFilter, audioBuffer, idx);
+			outFile.write(audioBuffer, idx);
+		}
 		// outfile wil close on destruction, but the pointer won't
 		delete[] audioBuffer;
 	} else {
