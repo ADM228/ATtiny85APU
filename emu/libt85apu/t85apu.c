@@ -1,4 +1,5 @@
-#include "ATtiny85APU.h"
+#include "t85apu.h"
+#include <stdio.h>
 #include <math.h>
 #include <tgmath.h>
 #include <stdint.h>
@@ -43,6 +44,10 @@ static const double outputQualityThreshold[] = {
 
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
+	if (!apu) {
+		fprintf(stderr, "Could not allocate t85apu\n");
+		return 0;
+	}
 	apu->resamplingBuffer = calloc(1, sizeof(uint32_t));	// Just to not make it screw up at the actual allocation
 	t85APU_setClocknRate(apu, clock, rate);
 	t85APU_setOutputType(apu, outputType);
@@ -60,6 +65,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 }
 
 void t85APU_reset (t85APU * apu) {
+	if (!apu) return;
 	memset(apu->tonePhaseAccs, 	0, 	sizeof(uint16_t)*(5+1));
 	memset(apu->envSmpVolume,	0,	sizeof(uint8_t)*(4));
 
@@ -96,6 +102,7 @@ void t85APU_delete (t85APU * apu) {
 
 
 void t85APU_setClocknRate (t85APU * apu, double clock, double rate) {
+	if (!apu) return;
 	// Clock is the clock rate of the ATtiny85 itself in Hz, default 8000000Hz
 	// Rate is the sample rate of the output, default is clock/512
 	if (!clock)	clock = 8000000;
@@ -107,6 +114,7 @@ void t85APU_setClocknRate (t85APU * apu, double clock, double rate) {
 };
 
 void t85APU_setOutputType (t85APU * apu, uint_fast8_t outputType) {
+	if (!apu) return;
 	apu->outputType = outputType;
 	
 	if (outputType > sizeof(outputTypesBitdepths))
@@ -117,6 +125,7 @@ void t85APU_setOutputType (t85APU * apu, uint_fast8_t outputType) {
 }
 
 uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
+	if (!apu) return 0;
 	uint16_t out = apu->shiftRegister[0];
 	#if T85APU_SHIFT_REGISTER_SIZE > 1
 	uint16_t buffer[T85APU_SHIFT_REGISTER_SIZE-1];
@@ -129,6 +138,7 @@ uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 }
 
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
+	if (!apu) return;
 	uint16_t shiftRegData = (addr << 8) | data | 0x8000;
 	if (apu->shiftRegMode && apu->shiftRegPtr < T85APU_SHIFT_REGISTER_SIZE)	// == STACK_REG
 		apu->shiftRegister[apu->shiftRegPtr++] = shiftRegData;
@@ -137,6 +147,8 @@ void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
 }
 
 void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
+	if (!apu) return;
+
 	addr &= 0x7F;
 	uint8_t r0, r1 = data, r2, r3, ZL, ZH;
 	switch(addr){
@@ -274,14 +286,18 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 }
 
 void t85APU_setQuality (t85APU * apu, uint_fast8_t quality) {
+	if (!apu) return;
 	apu->quality = quality;
 }
 
 bool t85APU_shiftRegisterPending(t85APU * apu) {
+	if (!apu) return 0;
 	return (apu->shiftRegister[0] & 0x8000) ? true : false;
 }
 
 void t85APU_cycle (t85APU * apu) {
+	if (!apu) return;
+
 	uint_fast8_t skipCount = 4;
 	if (apu->shiftRegister[0] & 0x8000) {
 		// TODO handle skip count
@@ -356,6 +372,8 @@ void t85APU_cycle (t85APU * apu) {
 }
 
 void t85APU_tick (t85APU * apu) {
+	if (!apu) return;
+
 	if (!apu->clockCycle) {
 		t85APU_cycle(apu);
 		apu->outPending = 1;
@@ -373,6 +391,8 @@ void t85APU_tick (t85APU * apu) {
 }
 
 uint32_t t85APU_calc(t85APU *apu) {
+	if (!apu) return 0;
+
 	apu->ticks += apu->ticksPerClockCycle;
 	uint32_t output;
 	size_t totalSize = floor(apu->ticks);

@@ -1,4 +1,4 @@
-/* ATtiny85APU.h */
+/* t85apu.h */
 #ifndef __ATTINY85APU_H__
 #define __ATTINY85APU_H__
 
@@ -15,7 +15,7 @@ extern "C"
 #define T85APU_SHIFT_REGISTER_SIZE 1
 #endif
 
-typedef struct __ATtiny85APU {
+typedef struct __t85apu {
 	// Replica of internal RAM
 	uint16_t noiseLFSR;
 	uint16_t envPhaseAccs[2];

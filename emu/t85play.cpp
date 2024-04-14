@@ -13,7 +13,7 @@
 #include <sndfile.hh>
 #include <soundio/soundio.h>
 
-#include "ATtiny85APU.h"
+#include "libt85apu/t85apu.hpp"
 #include "BitConverter.cpp"
 #include "NotchFilter.cpp"
 
@@ -21,7 +21,7 @@
 static const uint32_t currentFileVersion = 0x00000000;	// 16.8.8 bits semantic versioning
 static const uint32_t currentGd3Version = 0x00000100;
 
-t85APU * apu;
+t85APUHandle apu;
 
 std::filesystem::path inFilePath;
 bool inFileDefined = false;
@@ -203,12 +203,12 @@ static void write_callback(struct SoundIoOutStream *outstream, int frame_count_m
 				}
 			}
 			// std::cout << sampleTickCounter << "  " << regWrites.size() << std::endl;
-			if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
-				t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
+			if (!apu.shiftRegisterPending() && regWrites.size()) {
+				apu.writeReg(regWrites.front()&0xFF, regWrites.front()>>8);
 				// std::cout << frames_left << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
 				regWrites.pop_front();
 			} 
-			int16_t sample = (int16_t)(t85APU_calc(apu)<<(15-apu->outputBitdepth));
+			int16_t sample = (int16_t)(apu.calc()<<(15-apu()->outputBitdepth));
 			sample -= 1<<14;
 			if (notchFilterEnabled) sample = filterSingle(notchFilter, sample);
 			for (int channel = 0; channel < layout->channel_count; channel++) {
@@ -556,12 +556,12 @@ R"(Command-line options:
 			while (sampleTickCounter >= 1.0) {
 				// std::cout << sampleTickCounter << "   " << regWrites.size() << std::endl;
 				sampleTickCounter -= 1.0;
-				if (!t85APU_shiftRegisterPending(apu) && regWrites.size()) {
-					t85APU_writeReg(apu, regWrites.front()&0xFF, regWrites.front()>>8);
+				if (!apu.shiftRegisterPending() && regWrites.size()) {
+					apu.writeReg(regWrites.front()&0xFF, regWrites.front()>>8);
 					std::cout << totalSmpCount << " - WR: " << std::hex << (regWrites.front()>>8) << "->" << (regWrites.front()&0xFF) << std::dec << std::endl;
 					regWrites.pop_front();
 				} 
-				BitConverter::writeBytes(audioBuffer+(idx++), (uint16_t)((t85APU_calc(apu)<<(15-apu->outputBitdepth)) - (1<<14)));
+				BitConverter::writeBytes(audioBuffer+(idx++), (uint16_t)((apu.calc()<<(15-apu()->outputBitdepth)) - (1<<14)));
 				if (idx >= sampleRate) {
 					if (notchFilterEnabled) BandFilter::filterBuffer(notchFilter, audioBuffer, sampleRate);
 					idx = 0;
@@ -642,7 +642,5 @@ R"(Command-line options:
 
 	}
 
-	t85APU_delete(apu);
 	return 0;
-
 }
