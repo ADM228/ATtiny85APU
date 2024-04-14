@@ -1,3 +1,10 @@
+/* 
+t85apu.c
+Part of the ATtiny85APU emulation library
+Written by alexmush
+2024-2024
+*/
+
 #include "t85apu.h"
 #include <stdio.h>
 #include <math.h>

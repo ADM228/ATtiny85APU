@@ -1,4 +1,10 @@
-/* t85apu.h */
+/* 
+t85apu.h
+Part of the ATtiny85APU emulation library
+Written by alexmush
+2024-2024
+*/
+
 #ifndef __ATTINY85APU_H__
 #define __ATTINY85APU_H__
 

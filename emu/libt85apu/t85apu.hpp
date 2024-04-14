@@ -1,4 +1,15 @@
-/* t85apu.hpp */
+/* 
+t85apu.hpp
+Part of the ATtiny85APU emulation library
+Written by alexmush
+2024-2024
+*/
+
+#ifndef __cplusplus
+#error "This is a C++ wrapper, meant only for C++"
+#endif
+
+
 #ifndef __ATTINY85APU_HPP__
 #define __ATTINY85APU_HPP__
 

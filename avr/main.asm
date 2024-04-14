@@ -1,10 +1,6 @@
 ; APU pinout:
 
-;			   __ __
-;			-1|° U  |8- GND
-;		CS0	-2|		|7- SPI CLK
-;	OUT/CS1	-3|		|6- SPI DO (MOSI)
-;		GND	-4|_____|5- SPI DI (MISO)
+
 ;
 ;	The APU is the master of SPI
 ;	CS0 and CS1 connect to multiplexers to accept 4 targets:
