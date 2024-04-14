@@ -28,6 +28,7 @@ This project is creating a soundchip out of an ATtiny85. Written entirely in ass
   - Powered by a 16-bit Galois LFSR with adjustable taps
   - The operation is XNOR, always can come back to life
   - Dedicated phase reset bit
+  - On each channel, OR'd with the pulse wave
 - Sample playback
   - Not implemented (yet)
   
