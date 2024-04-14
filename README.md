@@ -46,7 +46,7 @@ The registers themselves:
 |   0x07    | PHICD |Ch.D PR|Channel D octave number|Ch.C PR|Channel C octave number|
 |   0x08    | PHIEN |NoisePR|Noise gen octave number|Ch.E PR|Channel E octave number|
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x09    | DUTYX |                   Channel X tone duty cycle                   |    n = 9..D, X = A..E
+|   0x0n    | DUTYX |                   Channel X tone duty cycle                   |    n = 9..D, X = A..E
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
 |   0x0E    | NTPLO |             Noise LFSR inversion value (low byte)             |
 |   0x0F    | NTPHI |             Noise LFSR inversion value (high byte)            |
