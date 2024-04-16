@@ -1,7 +1,6 @@
 
 # Only intended for linux.
 firmware: bin/avr/main.hex
-t85play: bin/emu/t85play
 libt85apu: bin/emu/libt85apu.a bin/emu/libt85apu.so
 
 bin/avr/main.hex bin/avr/main.map: bin/avr avr/main.asm
@@ -13,10 +12,6 @@ bin/avr/main.elf: bin/avr bin/avr/main.hex bin/avr/main.map
 flash: bin/avr bin/avr/main.hex
 	# DEV := "/dev/ttyUSB0"
 	avrdude -v -p attiny85 -c stk500v1 -b19200 -P /dev/ttyUSB0 -U flash:w:bin/avr/main.hex:i
-
-bin/emu/t85play: bin/emu bin/emu/libt85apu.a emu/t85play.cpp emu/NotchFilter.cpp emu/BitConverter.cpp
-	g++ -g -O2 -c emu/t85play.cpp -o bin/emu/t85play.o
-	g++ -g -o bin/emu/t85play -L bin/emu bin/emu/t85play.o -lt85apu -lsndfile -lsoundio
 
 bin/emu:
 	mkdir -p bin/emu

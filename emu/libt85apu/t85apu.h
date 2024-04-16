@@ -17,8 +17,8 @@ extern "C"
 {
 #endif
 
-#ifndef T85APU_SHIFT_REGISTER_SIZE
-#define T85APU_SHIFT_REGISTER_SIZE 1
+#if T85APU_SHIFT_REGISTER_SIZE < 1
+#undef T85APU_SHIFT_REGISTER_SIZE
 #endif
 
 typedef struct __t85apu {
@@ -49,11 +49,6 @@ typedef struct __t85apu {
 	uint8_t noiseMask;
 	uint8_t envZeroFlg;
 
-	// Shift register emulation
-	uint16_t shiftRegister[T85APU_SHIFT_REGISTER_SIZE];
-	size_t shiftRegPtr;
-	bool shiftRegMode;
-
 	// Compile-time options
 	uint_fast8_t outputType;
 	uint_fast8_t outputBitdepth;
@@ -71,12 +66,25 @@ typedef struct __t85apu {
 	uint16_t channelOutput[5];
 	uint32_t currentOutput;
 	uint32_t outputQueue[3];	// Only really applies to the PWM output, [0] is current output
+
+	// Shift register emulation
+	#ifdef T85APU_SHIFT_REGISTER_SIZE
+	uint16_t shiftRegister[T85APU_SHIFT_REGISTER_SIZE];
+	#else
+	uint16_t * shiftRegister;
+	size_t shiftRegSize;
+	#endif
+	size_t shiftRegCurIdx;
 } t85APU;
 
 #define T85APU_OUTPUT_PB4 0
 #define T85APU_OUTPUT_PB4_EXACT 1
 
+#ifdef T85APU_SHIFT_REGISTER_SIZE
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType);	// Automatically resets it
+#else
+t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t shiftRegisterSize);
+#endif
 void t85APU_delete (t85APU * apu);
 void t85APU_reset (t85APU * apu);
 

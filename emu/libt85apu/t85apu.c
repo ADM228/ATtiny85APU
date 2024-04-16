@@ -49,13 +49,17 @@ static const double outputQualityThreshold[] = {
 	1.0,	// T85APU_OUTPUT_PB4_EXACT, PWM is a bitch and changes every cycle
 };
 
+#ifdef T85APU_SHIFT_REGISTER_SIZE
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
+#else
+t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t shiftRegisterSize) {
+#endif
 	t85APU * apu = (t85APU *) calloc(1, sizeof(t85APU));
 	if (!apu) {
-		fprintf(stderr, "Could not allocate t85apu\n");
-		return 0;
+		fprintf(stderr, "Could not allocate t85APU\n");
+		return NULL;
 	}
-	apu->resamplingBuffer = calloc(1, sizeof(uint32_t));	// Just to not make it screw up at the actual allocation
+	apu->resamplingBuffer = NULL;
 	t85APU_setClocknRate(apu, clock, rate);
 	t85APU_setOutputType(apu, outputType);
 	double tmp;
@@ -65,9 +69,18 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 	t85APU_reset(apu);
 	apu->shiftRegister[0] = 0;
 	apu->ticks = 0;
-	apu->shiftRegMode = STACK_REG;
-	apu->shiftRegPtr = 0;
+	apu->shiftRegCurIdx = 0;
+	#ifdef T85APU_SHIFT_REGISTER_SIZE
 	memset(apu->shiftRegister, 0, sizeof(uint16_t)*T85APU_SHIFT_REGISTER_SIZE);
+	#else
+	apu->shiftRegister = calloc(shiftRegisterSize, sizeof(uint16_t));
+	if (!apu->shiftRegister){
+		fprintf(stderr, "Could not allocate t85apu shift register, deleting the t85APU\n");
+		if (apu->resamplingBuffer) free(apu->resamplingBuffer);
+		free(apu);
+		return NULL;
+	}
+	#endif
 	return apu;
 }
 
@@ -117,7 +130,12 @@ void t85APU_setClocknRate (t85APU * apu, double clock, double rate) {
 
 	apu->ticksPerClockCycle = clock / rate; 
 
-	apu->resamplingBuffer = realloc(apu->resamplingBuffer, ceil(apu->ticksPerClockCycle) * sizeof(uint32_t));
+	if (apu->resamplingBuffer) free(apu->resamplingBuffer);
+	apu->resamplingBuffer = calloc(ceil(apu->ticksPerClockCycle), sizeof(uint32_t));
+	if (!apu->resamplingBuffer) {
+		fprintf(stderr, "Could not allocate t85APU resampling buffer, quality will be forced to be 0\n");
+		apu->quality = 0;
+	}
 };
 
 void t85APU_setOutputType (t85APU * apu, uint_fast8_t outputType) {
@@ -138,19 +156,26 @@ uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 	uint16_t buffer[T85APU_SHIFT_REGISTER_SIZE-1];
 	memcpy (buffer, apu->shiftRegister+1, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
 	memcpy (apu->shiftRegister, buffer, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
-	#endif
 	apu->shiftRegister[T85APU_SHIFT_REGISTER_SIZE-1] = newData;
-	if (apu->shiftRegMode && apu->shiftRegPtr > 0) apu->shiftRegPtr--;
+	#elif !defined(T85APU_SHIFT_REGISTER_SIZE)
+	for (size_t i = 0; i < apu->shiftRegSize-1; i++) {
+		apu->shiftRegister[i] = apu->shiftRegister[i+1];
+	}
+	apu->shiftRegister[apu->shiftRegSize-1] = newData;
+	#endif
+	if (apu->shiftRegCurIdx > 0) apu->shiftRegCurIdx--;
 	return out;
 }
 
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
 	if (!apu) return;
 	uint16_t shiftRegData = (addr << 8) | data | 0x8000;
-	if (apu->shiftRegMode && apu->shiftRegPtr < T85APU_SHIFT_REGISTER_SIZE)	// == STACK_REG
-		apu->shiftRegister[apu->shiftRegPtr++] = shiftRegData;
-	else
-		t85APU_shiftReg(apu, shiftRegData);
+#ifdef T85APU_SHIFT_REGISTER_SIZE
+	if (apu->shiftRegCurIdx < T85APU_SHIFT_REGISTER_SIZE)	// == STACK_REG
+#else
+	if (apu->shiftRegCurIdx < apu->shiftRegSize)
+#endif
+		apu->shiftRegister[apu->shiftRegCurIdx++] = shiftRegData;
 }
 
 void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
@@ -294,7 +319,7 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 
 void t85APU_setQuality (t85APU * apu, uint_fast8_t quality) {
 	if (!apu) return;
-	apu->quality = quality;
+	apu->quality = apu->resamplingBuffer ? quality : 0;	// Force quality to 0 if no resampling buffer
 }
 
 bool t85APU_shiftRegisterPending(t85APU * apu) {
