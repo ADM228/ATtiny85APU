@@ -5,7 +5,7 @@
 ; OUT/CS1 -3|     |6- SPI DO (MOSI)
 ;     GND -4|_____|5- SPI DI (MISO)
 ;
-;	The APU is the master of SPI
+;	The APU is the master of SPI, except for when it isn't
 ;	CS0 and CS1 connect to multiplexers to accept 4 targets:
 ;		0. Incoming register write buffer
 ;		1. ROM/RAM with wave data
@@ -24,6 +24,7 @@
 
 ;	Commands are put in via SPI from a shift register/serial
 ;	buffer IC. An example can be the 74'165.
+;	Slave mode is currently being worked on, but it's extra hassle
 ;	Registers:
 
 ;  ___________ _______ _______________________________________________________________
@@ -77,6 +78,7 @@
 ;			|_______________________________________________________________|
 
 .define OUTPUT_PB4
+.define REGWRITES_SPI_SLAVE 1
 ; .define SPI_DEBUG
 
 .include "./tn85def.inc"
@@ -107,6 +109,10 @@
 	.error "Unsupported DAC type"
 .endif
 
+.if !defined(REGWRITES_SPI_SLAVE)
+	.warning "SPI role for getting register writes not selected, defaulting to master"
+	.define REGWRITES_SPI_SLAVE 0
+.endif
 
 
 .equ	USCK	= PB2
@@ -172,6 +178,11 @@ Increments:			.byte 8
 ShiftedIncrementsL:	.byte 8
 ShiftedIncrementsH:	.byte 8
 OctaveValues:		.byte 7
+
+.if REGWRITES_SPI_SLAVE
+RegWriteAddr:		.byte 1
+RegWriteData:		.byte 1
+.endif
 
 .equ PhaseAccEnvA_L	= EnvPhaseAccs+0
 .equ PhaseAccEnvA_H	= EnvPhaseAccs+1
@@ -310,7 +321,36 @@ rjmp Init
 .org OVF1addr
 rjmp Cycle
 
-; .org INT_VECTORS_SIZE	; Unnecessary
+.if REGWRITES_SPI_SLAVE
+.org USI_OVFaddr
+SPIIRQHandler:
+	push r16
+	lds	r16,	RegWriteAddr
+	sbrc r16,	7
+	rjmp L024
+	; Bit is clear, write data
+	sbr	r16,	0x80
+	sts	RegWriteAddr,	r16
+
+	clr	r16
+	out	USICR,	r16
+	in	r16,	USIDR
+	sts	RegWriteData,	r16
+	.ifdef (OUTPUT_PB4)
+	sbi	PortB,	CS0
+	.endif
+	pop	r16
+	reti
+
+	L024:	; address write
+	in	r16,	USIBR
+	andi r16,	0x7F
+	sts	RegWriteAddr,	r16
+	pop r16
+	reti
+
+.endif
+
 Init:
 	cli
 	.ifdef SPH ; if SPH is defined
@@ -443,14 +483,30 @@ Forever:
 	rjmp Forever
 
 Cycle:
-	cbi	PortB,	PB3
+	.if REGWRITES_SPI_SLAVE
+	sei
 
+	ldi	r16,	(0<<USISIE)|(1<<USIOIE)|(1<<USIWM0)|(4<<USICLK)|(0<<USITC)
+	out	USICR,	r16
+	.endif
+
+	cbi	PortB,	CS0
+
+	.if !REGWRITES_SPI_SLAVE
 	sbis PINB,	PINB0	; If no input pending, skip this
 	rjmp AfterSPI
 
 	rcall	SPITransfer
+	andi r18,	0x7F
+	.else
+	lds	r18,	RegWriteAddr
+	sbrs r18,	7
+	rjmp AfterSPI
 
-	andi r18,	0x7F	;
+	clr r16
+	sts	RegWriteAddr, r16
+	.endif
+
 	cpi	r18,	(CallTableEnd-CallTable)
 	brlo L000			;	Get reg number
 	ldi	r18,	(CallTableEnd-CallTable-1)
@@ -464,15 +520,25 @@ Cycle:
 	add ZL,		r18		;	Get IJMP pointer into Z
 	adc	ZH,		YH		;__
 
+	.if !REGWRITES_SPI_SLAVE
+
 	out	USIDR,	ZL
 	rcall 	SPITransfer_noOut
 
 	mov	r1,		r18		;__	Reg 1 has data
 
+	.else
+
+	lds r1,		RegWriteData
+
+	.endif
+
 	ijmp
 
 AfterSPI:
-	sbi PortB,	PB3
+	.if !REGWRITES_SPI_SLAVE	; if master, minimum CS time to give max time to put shit in
+	sbi PortB,	CS0
+	.endif
 PhaseAccEnvUpd:
 	; UP TO 46 CYCLES AAAAAAAAAAAAAAAAAAAA
 	; lds env octave (only once)
