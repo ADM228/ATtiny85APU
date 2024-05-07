@@ -157,6 +157,8 @@ uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 	memcpy (buffer, apu->shiftRegister+1, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
 	memcpy (apu->shiftRegister, buffer, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
 	apu->shiftRegister[T85APU_SHIFT_REGISTER_SIZE-1] = newData;
+	#elif T85APU_SHIFT_REGISTER_SIZE == 1
+	apu->shiftRegister[1] = newData;
 	#elif !defined(T85APU_SHIFT_REGISTER_SIZE)
 	for (size_t i = 0; i < apu->shiftRegSize-1; i++) {
 		apu->shiftRegister[i] = apu->shiftRegister[i+1];
