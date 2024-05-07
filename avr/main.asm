@@ -1,6 +1,9 @@
 ; APU pinout:
-
-
+;            __ __
+;  /Reset -1|° U  |8- GND
+;     CS0 -2|     |7- SPI CLK
+; OUT/CS1 -3|     |6- SPI DO (MOSI)
+;     GND -4|_____|5- SPI DI (MISO)
 ;
 ;	The APU is the master of SPI
 ;	CS0 and CS1 connect to multiplexers to accept 4 targets:
@@ -21,57 +24,38 @@
 
 ;	Commands are put in via SPI from a shift register/serial
 ;	buffer IC. An example can be the 74'165.
-;		Note: if the IC shifts out signals on a rising clock
-;		pulse, an inverter needs to be connected between its
-;		clock pin and the APU's SPI CLK pin. An example with TI
-;		chips:
-
-;			.-----------------------.
-;		  .-|-----..------.    		|
-;		 8765    4321098  |  65432109
-;		[APU ]  [ 74'04 ] | [ 74'165 ]
-;		 1234    1234567  |  12345678
-;						  '---'
-
-
 ;	Registers:
 
-;					 _______________________________________________________________
-;	Bit ->			|	7	|	6	|	5	|	4	|	3	|	2	|	1	|	0	|
-;	Index	|  Name |=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x00	| PILOA	|		Pitch increment value for tone on channel A				|
-;	0x01	| PILOB	|		Pitch increment value for tone on channel B				|
-;	0x02	| PILOC	|		Pitch increment value for tone on channel C				|
-;	0x03	| PILOD	|		Pitch increment value for tone on channel D				|
-;	0x04	| PILOE	|		Pitch increment value for tone on channel E				|
-;	0x05	| PILON	|		Pitch increment value for noise generator				|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x06	| PHIAB	|Ch.B PR|Channel B octave number|Ch.A PR|Channel A octave number|	PR = Phase reset
-;	0x07	| PHICD	|Ch.D PR|Channel D octave number|Ch.C PR|Channel C octave number|
-;	0x08	| PHIEN	|NoisePR|Noise gen octave number|Ch.E PR|Channel E octave number|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x09	| DUTYA	|					Channel A tone duty cycle					|
-;	0x0A	| DUTYB	|					Channel B tone duty cycle					|
-;	0x0B	| DUTYC	|					Channel C tone duty cycle					|
-;	0x0C	| DUTYD	|					Channel D tone duty cycle					|
-;	0x0D	| DUTYE	|					Channel E tone duty cycle					|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x0E	| NTPLO	|			Noise LFSR inversion value (low byte)				|
-;	0x0F	| NTPHI	|			Noise LFSR inversion value (high byte)				|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1n	| VOLX	|						Channel X volume						|	n = 0..4, X = A..E
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1n	| CFGX	|NoiseEn| EnvEn |Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1A	| ELLO	|			Low byte of envelope phase load value				|
-;	0x1B	| ELHI	|			High byte of envelope phase load value				|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1C	| ESHP	|EnvB PR|	Envelope B shape	|EnvA PR|	Envelope A shape	|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
-;	0x1D	| EPLA	|				Pitch increment value for envelope A			|
-;	0x1E	| EPLB	|				Pitch increment value for envelope B			|
-;	0x1F	| EPH	|		Envelope B octave num	|		Envelope A octave num	|
-;					|=======|=======|=======|=======|=======|=======|=======|=======|
+;  ___________ _______ _______________________________________________________________
+; |           | Bit → |   7   |   6   |   5   |   4   |   3   |   2   |   1   |   0   |
+; |   Index   |  Name |=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x0n    | PILOX |          Pitch increment value for tone on channel X          |    n = 0..4, X = A..E
+; |   0x05    | PILON |           Pitch increment value for noise generator           |
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x06    | PHIAB |Ch.B PR|Channel B octave number|Ch.A PR|Channel A octave number|
+; |   0x07    | PHICD |Ch.D PR|Channel D octave number|Ch.C PR|Channel C octave number|
+; |   0x08    | PHIEN |NoisePR|Noise gen octave number|Ch.E PR|Channel E octave number|
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x0n    | DUTYX |                   Channel X tone duty cycle                   |    n = 9..D, X = A..E
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x0E    | NTPLO |             Noise LFSR inversion value (low byte)             |
+; |   0x0F    | NTPHI |             Noise LFSR inversion value (high byte)            |
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x1n    | VOLX  |                    Channel X static volume                    |    n = 0..4, X = A..E
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x1n    | CFGX  |NoiseEn| EnvEn |Env/Smp| Slot# |  Right volume |  Left volume  |    n = 5..9, X = A..E
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x1A    | ELLO  |             Low byte of envelope phase load value             |
+; |   0x1B    | ELHI  |            High byte of envelope phase load value             |
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x1C    | ESHP  |EnvB PR|    Envelope B shape   |EnvA PR|    Envelope A shape   |
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x1D    | EPLA  |             Pitch increment value for envelope A              |
+; |   0x1E    | EPLB  |             Pitch increment value for envelope B              |
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |   0x1F    | EPH   |     Envelope B octave num     |     Envelope A octave num     |
+; |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
+; |___________|_______|_______|_______|_______|_______|_______|_______|_______|_______|
 ;	0x20	| SPLA	|					Low byte of sample A pointer				|	
 ;	0x21	| SPLB	|					Low byte of sample B pointer				|
 ;					|=======|=======|=======|=======|=======|=======|=======|=======|
@@ -93,27 +77,31 @@
 ;			|_______________________________________________________________|
 
 .define OUTPUT_PB4
+; .define SPI_DEBUG
 
 .include "./tn85def.inc"
 
 ; Internal configuration - DO NOT TOUCH
 .if !defined(STEREO) || !defined(MONO)
-	.if defined(OUTPUT_PB4) || defined(OUTPUT_DAC7311) || defined(OUTPUT_DAC6311) || defined(OUTPUT_DAC5311) || defined(OUTPUT_MCP4801) || defined(OUTPUT_MCP4811) || defined(OUTPUT_MCP4821)
-		.define MONO 1
-	.elseif defined (OUTPUT_DAC7612) || defined(OUTPUT_MCP4802) || defined(OUTPUT_MCP4812) || defined(OUTPUT_MCP4822)
-		.define STEREO 1
+	.if defined(OUTPUT_PB4) || defined(OUTPUT_DACX311) || defined(OUTPUT_MCP48X1)
+		.define CHANNELS 1
+	.elseif defined (OUTPUT_DAC7612) || defined(OUTPUT_MCP48X2)
+		.define CHANNELS 2
 	.endif
 .elseif defined(OUTPUT_PB4) && defined(STEREO)
 	.error "PB4 cannot be stereo (it's a single pin, you can't output multiple channels on one analog pin)"
 .elseif defined(MONO) && defined(STEREO) && MONO && STEREO
-	.error "Select stereo or mono output"
+	.error "Please select one of stereo or mono output"
+.elseif defined(STEREO)
+	.define CHANNELS 2
+.elseif defined(MONO)
+	.define CHANNELS 1
 .endif
 
-.if defined(OUTPUT_PB4) || defined(OUTPUT_DAC5311) || defined(OUTPUT_MCP4801)
+.if defined(OUTPUT_PB4)
 	.define BITDEPTH 8
-.elseif defined(OUTPUT_DAC6311) || defined(OUTPUT_MCP4811)
-	.define BITDEPTH 10
-.elseif defined(OUTPUT_DAC7311) || defined(OUTPUT_MCP4821)
+.elseif defined(OUTPUT_DACX311) || defined(OUTPUT_MCP48X1)
+	; The DACs ignore the extra bits, and there's no perf gain
 	.define BITDEPTH 12
 .else	
 	.error "Unsupported DAC type"
@@ -125,7 +113,12 @@
 .equ	DO		= PB1
 .equ	DI		= PB0
 
+.if defined(OUTPUT_PB4)
 .equ	PWM_OUT	= PB4
+.else
+.equ	CS1		= PB4
+.endif
+.equ	CS0		= PB3
 
 ; r0..4 are temp regs
 
@@ -304,8 +297,8 @@ Registers:
 	.equ ENV_B_RST	= 7
 
 	; CFGX
-	.equ ENV_EN		= 6
 	;	0x1n	| CFGX	|NoiseEn| EnvEn |Env/Smp| Slot# | Right volume	|  Left volume	|	n = 5..9, X = A..E
+	.equ ENV_EN		= 6
 	.equ ENV_SMP	= 5
 	.equ SLOT_NUM	= 4
 
@@ -329,23 +322,40 @@ Init:
 	; Set timer 0 freq to max for SPI + SPI settings
 	clr r0
 	clr r1
-	clr r16
+	; clr r16
 	clr	XH	
 	clr	YH
-	out TCCR0B,	r16	; (0<<FOC0A)|(0<<FOC0B)|\	; No force strobe
-					; (0<<WGM02)|\				; Total wavegen mode = 000 (normal)
-					; (0<<CS00)					; No clock source
-	out USISR,	r16	; (0<<USISIF)|(0<<USIOIF)|\	; No interrupts
-					; (0<<USIPF)|\				; No stop condition
-					; (0<<USICNT0)				; Counter at 0
-	out TCCR0A,	r16	; (0<<COM0A0)|(0<<COM0B0)|\	; Normal port operation
-					; (0<<WGM00)				; Total wavegen mode = 000 (normal)
-	out TIFR,	r16	; Clear interrupts
-	out PLLCSR,	r16	; Disable the PLL
-	out USICR,	r16	; (0<<USISIE)|(0<<USIOIE)|\	; No interrupts
-					; (0<<USIWM0)|\				; USI disabled
-					; (0<<USICLK)|\				; No clock source
-					; (0<<USITC)				; Don't toggle anything
+
+	; (0<<FOC0A)|(0<<FOC0B)|\	; No force strobe
+	; (0<<WGM02)|\				; Total wavegen mode = 000 (normal)
+	; (0<<CS00)					; No clock source
+	; out TCCR0B,	r16	; Done by default
+
+	; (0<<USISIF)|(0<<USIOIF)|\	; No interrupts
+	; (0<<USIPF)|\				; No stop condition
+	; (0<<USICNT0)				; Counter at 0
+	; out USISR,	r16	; Done by default
+
+	; (0<<COM0A0)|(0<<COM0B0)|\	; Normal port operation
+	; (0<<WGM00)				; Total wavegen mode = 000 (normal)
+	; out TCCR0A,	r16	; Done by default
+
+
+	; out TIFR,	r16	; Clear interrupts, already done by default
+	; out PLLCSR,	r16	; Disable the PLL, done by default
+
+	; (0<<USISIE)|(0<<USIOIE)|\	; No interrupts
+	; (0<<USIWM0)|\				; USI disabled
+	; (0<<USICLK)|\				; No clock source
+	; (0<<USITC)				; Don't toggle anything
+	; out USICR,	r16	; Done by default
+
+	; Set Port modes
+	ldi r16,	(1<<CS0)|(1<<PWM_OUT)|(0<<DI)|(1<<DO)|(1<<USCK)
+	out DDRB,	r16
+	ldi r16,	(1<<CS0)|(1<<PWM_OUT)
+	out PortB,	r16
+
 	; Enable T1's PWM B, output the positive OCR1B,
 	; Force no output compares,
 	; Reset prescalers just in case
@@ -360,16 +370,13 @@ Init:
 	; Enable T1 at the rate of CK (256 cycles)
 	ldi r16,	(0<<CTC1)|(0<<PWM1A)|(0b00<<COM1A0)|(1<<CS10)
 	out TCCR1,	r16			;__
-	; Set Port modes
-	ldi r16,	(1<<PB3)|(1<<PWM_OUT)|(0<<DI)|(1<<DO)|(1<<USCK)
-	out DDRB,	r16
-	ldi r16,	(1<<PB3)|(1<<PWM_OUT)
-	out PortB,	r16
 
+	.ifdef SPI_DEBUG
 	ldi r16,	(1<<CLKPCE)	;
-	ldi	r17,	(0<<CLKPS0)	;	Set to 8MHz
-	out	CLKPR,	r16			;
+	ldi	r17,	(6<<CLKPS0)	;	Divide cock speed by 64
+	out	CLKPR,	r16			;	(125kHz result)
 	out	CLKPR,	r17			;__
+	.endif
 
 	ldi r16,	0xA5
 	out USIDR,	r16
@@ -706,7 +713,7 @@ Multiply:	; 27 cycles
 	; BAM r0 now has the output value
 
 	.elseif BITDEPTH > 8 && BITDEPTH <= 12
-	.if defined(OUTPUT_DAC7311) || defined(OUTPUT_DAC6311) || defined(OUTPUT_DAC5311) || defined(OUTPUT_DAC7612)
+	.if defined(OUTPUT_DACX311) || defined(OUTPUT_DAC7612)
 	; TI DACs have a 2-bit prefix before the data
 						;__	r1:r0 = 0000xxxx yyyyzzzz
 	lsl	r1				;	r1:r0 = 000xxxxy yyyzzzz0
@@ -714,7 +721,7 @@ Multiply:	; 27 cycles
 	lsl r1				;	r1:r0	= 00xxxxyy yyzzzz00
 	rol r0				;__
 	; Bam the output is now correct
-	.elseif defined(OUTPUT_MCP4801) || defined(OUTPUT_MCP4811) || defined(OUTPUT_MCP4821) || defined(OUTPUT_MCP4802) || defined(OUTPUT_MCP4812) || defined(OUTPUT_MCP4822)
+	.elseif defined(OUTPUT_MCP48X1) || defined(OUTPUT_MCP48X2)
 	; Microchip DACs have a 4-bit prefix, but the control bits gotta be configured
 	ldi	r16,	$30		; r1:r0	= 0011xxxx yyyyzzzz
 	or	r1,		r16		;__		
