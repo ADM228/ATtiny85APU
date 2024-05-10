@@ -41,7 +41,7 @@ class t85APUHandle {
 
 		inline bool shiftRegisterPending() { return t85APU_shiftRegisterPending(apu); }
 
-		inline const t85APU * operator() () { return apu; }
+		inline const t85APU & operator() () { return *apu; }
 
 		inline void operator= (const t85APU * __apu) {
 			this->apu = (t85APU *)calloc(1, sizeof(t85APU));
