@@ -309,9 +309,15 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 			ZL = apu->octaveValues[6];
 			ZH = ZL;
 			ZL = (ZL ^ data) & 0x07;
-			if (ZL) apu->shiftedIncrements[6] = data << (1+(data & 0x07));
+			if (ZL) {
+				r2 = apu->increments[6];
+				apu->shiftedIncrements[6] = r2 << (1+(data & 0x07));
+			}
 			ZH = (ZH ^ data) & 0x70;
-			if (ZL) apu->shiftedIncrements[7] = data << (1+((data >> 4) & 0x07));
+			if (ZL) {
+				r2 = apu->increments[7];
+				apu->shiftedIncrements[7] = r2 << (1+((data >> 4) & 0x07));
+			}
 			apu->octaveValues[6] = data;
 			break;
 		default:
