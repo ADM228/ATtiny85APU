@@ -91,7 +91,7 @@ The pin connection diagram is:
 
 ```
                __ __
-     /Reset -1|° U  |8- GND
+     /Reset -1|° U  |8- VCC
         CS0 -2|     |7- SPI CLK
     OUT/CS1 -3|     |6- SPI DO (MOSI)
         GND -4|_____|5- SPI DI (MISO)
