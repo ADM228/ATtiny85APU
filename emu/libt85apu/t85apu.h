@@ -65,7 +65,10 @@ typedef struct __t85apu {
 	// Output
 	uint16_t channelOutput[5];
 	uint32_t currentOutput;
-	uint32_t outputQueue[3];	// Only really applies to the PWM output, [0] is current output
+	uint32_t outputQueue[3];	// Only really applies to the PWM output
+
+	// Emulator-only options
+	bool channelMute[5];
 
 	// Shift register emulation
 	#ifdef T85APU_SHIFT_REGISTER_SIZE
@@ -95,8 +98,14 @@ void t85APU_setQuality	  (t85APU * apu, uint_fast8_t quality);
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data);
 
 uint32_t t85APU_calc (t85APU * apu);
+uint16_t t85APU_calcU16 (t85APU * apu);
+int16_t t85APU_calcS16 (t85APU * apu);
+uint32_t t85APU_calcU32 (t85APU * apu);
+int32_t t85APU_calcS32 (t85APU * apu);
 
 bool t85APU_shiftRegisterPending (t85APU * apu);
+
+void t85APU_setMute(t85APU * apu, uint_fast8_t channel, bool mute);
 
 #ifdef __cplusplus
 }

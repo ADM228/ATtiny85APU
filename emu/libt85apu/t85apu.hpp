@@ -38,8 +38,14 @@ class t85APUHandle {
 		inline void writeReg(uint8_t addr, uint8_t data) {t85APU_writeReg(apu, addr, data); }
 
 		inline uint32_t calc() { return t85APU_calc(apu); }
+		inline uint16_t calcU16 () { return t85APU_calcU16(apu); }
+		inline int16_t calcS16 () { return t85APU_calcS16(apu); }
+		inline uint32_t calcU32 () { return t85APU_calcU32(apu); }
+		inline int32_t calcS32 () { return t85APU_calcS32(apu); }
 
 		inline bool shiftRegisterPending() { return t85APU_shiftRegisterPending(apu); }
+
+		inline void setMute(uint_fast8_t channel, bool mute) { return t85APU_setMute(apu, channel, mute); }
 
 		inline const t85APU & operator() () { return *apu; }
 

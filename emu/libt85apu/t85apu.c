@@ -81,6 +81,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t 
 		return NULL;
 	}
 	#endif
+	memset(apu->channelMute,	false,	sizeof(bool)*5);
 	return apu;
 }
 
@@ -405,7 +406,7 @@ void t85APU_cycle (t85APU * apu) {
 		} else apu->channelOutput[ch] = 0;
 	}
 	uint32_t output = 0;
-	for (int i = 0; i < 5; i++) {output += apu->channelOutput[i];}
+	for (int i = 0; i < 5; i++) {output += apu->channelMute[i] ? 0 : apu->channelOutput[i];}
 	output *= 274;	// the Multiply routine
 	output >>= 20 - (uint32_t)fmin(apu->outputBitdepth, 20);
 	apu->outputQueue[(511+apu->outputDelay)>>9] = output;
@@ -455,4 +456,119 @@ uint32_t t85APU_calc(t85APU *apu) {
 			break;
 	}
 	return output;
+}
+
+uint16_t t85APU_calcU16 (t85APU * apu) {
+	if (!apu) return 0;
+
+	apu->ticks += apu->ticksPerClockCycle;
+	uint16_t output;
+	size_t totalSize = floor(apu->ticks);
+	for (size_t i = 0; i < totalSize; i++) {
+		t85APU_tick (apu);
+		if (apu->quality >= 1 && totalSize > 0) apu->resamplingBuffer[i] = (apu->currentOutput)<<(16-apu->outputBitdepth);
+	}
+	double totalOutput = 0;
+	double tmp;
+	apu->ticks = modf(apu->ticks, &tmp);
+	switch (apu->quality) {
+		case 1:
+			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)apu->resamplingBuffer[i];
+			totalOutput /= totalSize;
+			output = (uint16_t)totalOutput;
+			break;
+		case 0:
+		default:
+			output = (apu->currentOutput)<<(16-apu->outputBitdepth);
+			break;
+	}
+	return output;
+}
+
+int16_t t85APU_calcS16 (t85APU * apu) {
+	if (!apu) return 0;
+
+	apu->ticks += apu->ticksPerClockCycle;
+	uint16_t output;
+	size_t totalSize = floor(apu->ticks);
+	for (size_t i = 0; i < totalSize; i++) {
+		t85APU_tick (apu);
+		if (apu->quality >= 1 && totalSize > 0) apu->resamplingBuffer[i] = (apu->currentOutput)<<(15-apu->outputBitdepth);
+	}
+	double totalOutput = 0;
+	double tmp;
+	apu->ticks = modf(apu->ticks, &tmp);
+	switch (apu->quality) {
+		case 1:
+			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)apu->resamplingBuffer[i];
+			totalOutput /= totalSize;
+			output = (uint16_t)totalOutput;
+			break;
+		case 0:
+		default:
+			output = (apu->currentOutput)<<(15-apu->outputBitdepth);
+			break;
+	}
+	return (int16_t)output;
+}
+
+uint32_t t85APU_calcU32 (t85APU * apu) {
+	if (!apu) return 0;
+
+	apu->ticks += apu->ticksPerClockCycle;
+	uint32_t output;
+	size_t totalSize = floor(apu->ticks);
+	for (size_t i = 0; i < totalSize; i++) {
+		t85APU_tick (apu);
+		if (apu->quality >= 1 && totalSize > 0) apu->resamplingBuffer[i] = (apu->currentOutput)<<(32-apu->outputBitdepth);
+	}
+	double totalOutput = 0;
+	double tmp;
+	apu->ticks = modf(apu->ticks, &tmp);
+	switch (apu->quality) {
+		case 1:
+			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)apu->resamplingBuffer[i];
+			totalOutput /= totalSize;
+			output = (uint32_t)totalOutput;
+			break;
+		case 0:
+		default:
+			output = (apu->currentOutput)<<(32-apu->outputBitdepth);
+			break;
+	}
+	return output;
+}
+
+int32_t t85APU_calcS32 (t85APU * apu) {
+	if (!apu) return 0;
+
+	apu->ticks += apu->ticksPerClockCycle;
+	uint32_t output;
+	size_t totalSize = floor(apu->ticks);
+	for (size_t i = 0; i < totalSize; i++) {
+		t85APU_tick (apu);
+		if (apu->quality >= 1 && totalSize > 0) apu->resamplingBuffer[i] = (apu->currentOutput)<<(31-apu->outputBitdepth);
+	}
+	double totalOutput = 0;
+	double tmp;
+	apu->ticks = modf(apu->ticks, &tmp);
+	switch (apu->quality) {
+		case 1:
+			for (size_t i = 0; i < totalSize; i++) totalOutput += (double)apu->resamplingBuffer[i];
+			totalOutput /= totalSize;
+			output = (uint16_t)totalOutput;
+			break;
+		case 0:
+		default:
+			output = (apu->currentOutput)<<(31-apu->outputBitdepth);
+			break;
+	}
+	return (int32_t)output;
+}
+
+void t85APU_setMute(t85APU * apu, uint_fast8_t channel, bool mute){
+	if (!apu) return;
+
+	if (channel > 5) return;
+	apu->channelMute[channel] = mute;
 }
