@@ -4,7 +4,7 @@ firmware: bin/avr/main.hex
 libt85apu: bin/emu/libt85apu.a bin/emu/libt85apu.so
 
 bin/avr/main.hex bin/avr/main.map: bin/avr avr/main.asm
-	avra -m bin/avr/main.map -e bin/avr/main.eep.hex avr/main.asm -o bin/avr/main.hex
+	avra -I avr -m bin/avr/main.map -e bin/avr/main.eep.hex avr/main.asm -o bin/avr/main.hex
 
 bin/avr/main.elf: bin/avr bin/avr/main.hex bin/avr/main.map
 	avr-objcopy -v -I ihex -O elf32-avr bin/avr/main.hex bin/avr/main.elf

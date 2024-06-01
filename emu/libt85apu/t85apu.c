@@ -569,6 +569,6 @@ int32_t t85APU_calcS32 (t85APU * apu) {
 void t85APU_setMute(t85APU * apu, uint_fast8_t channel, bool mute){
 	if (!apu) return;
 
-	if (channel > 5) return;
+	if (channel > 4) return;
 	apu->channelMute[channel] = mute;
 }

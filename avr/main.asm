@@ -79,7 +79,7 @@
 .define OUTPUT_PB4
 ; .define SPI_DEBUG
 
-.include "./tn85def.inc"
+.include "tn85def.inc"
 
 ; Internal configuration - DO NOT TOUCH
 .if !defined(STEREO) || !defined(MONO)
