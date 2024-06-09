@@ -315,7 +315,7 @@ void t85APU_handleReg (t85APU * apu, uint8_t addr, uint8_t data) {
 				apu->shiftedIncrements[6] = r2 << (1+(data & 0x07));
 			}
 			ZH = (ZH ^ data) & 0x70;
-			if (ZL) {
+			if (ZH) {
 				r2 = apu->increments[7];
 				apu->shiftedIncrements[7] = r2 << (1+((data >> 4) & 0x07));
 			}
