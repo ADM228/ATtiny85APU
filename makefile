@@ -1,6 +1,7 @@
 
 # Only intended for linux.
 firmware: bin/avr/main.hex
+avr: bin/avr/main.hex
 libt85apu: bin/emu/libt85apu.a bin/emu/libt85apu.so
 
 bin/avr/main.hex bin/avr/main.map: bin/avr avr/main.asm
@@ -30,4 +31,4 @@ bin/emu/libt85apu.so:
 clean:
 	rm -r bin
 
-.PHONY: firmware flash libt85apu t85play clean
+.PHONY: avr firmware flash libt85apu t85play clean

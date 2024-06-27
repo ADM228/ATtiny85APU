@@ -1,0 +1,31 @@
+- CMake API description in README
+
+- Sample playback
+- External DAC connectivity
+
+- Cut out README.md stuff:
+
+connections:
+" (and 3 if external DACs are enabled)"
+"The ATtiny is the *master* of SPI for all connections, which are (depending on the CS pins):
+| CS1 | CS0 | External Device |
+|:---:|:---:|---|
+| 0 | 0 | Register write storage |
+| 0 | 1 | Flash memory<br>(if sample playback is enabled) |
+| 1 | 0 | (Left) DAC output<br>(if external DAC used) |
+| 1 | 1 | Right DAC output<br>(if 2 external DACs used for stereo) |
+Note: the CS1 pin is only used if external DAC(s) is/are enabled, otherwise it is the OUT pin (outputting PWM)."
+
+"### Output
+
+Here's a table of all output modes:
+
+| Name | Manufacturer | Output<br>bit depth | Stereo support | Notes | Implemented? |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| PWM output on OUT pin |  | 8 | No | PWM driven at 31250 Hz<br>Is the default | Yes |
+| DAC5311<br>DAC6311<br>DAC7311 | TI | 8<br>10<br>12 | Yes (needs 2x) |  | No |
+| DAC7612 | TI | 12 | Yes (needs 1x) |  | No |
+| MCP4801<br>MCP4811<br>MCP4812 | Microchip | 8<br>10<br>12 | Yes (needs 2x) |  | No |
+| MCP4802<br>MCP4812<br>MCP4822 | Microchip | 8<br>10<br>12 | Yes (needs 1x) |  | No |"
+
+", if used"
