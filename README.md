@@ -16,7 +16,7 @@ This project is creating a soundchip out of an ATtiny85. Written entirely in ass
     - 8-bit phase accumulator increment value
     - 4-bit octave value
       - When the MSB of the octave value is set, the pitch is equivalent to the pulse oscillators
-    - Shapes are the exact same as in the widely used soundchip AY-3-8910, but linear and with 256 steps
+    - Shapes are bit-compatible with the widely used soundchip AY-3-8910, but linear and with 256 steps
     - Dedicated phase reset bit
   - A channel's static volume:
     - 8 bits when not using envelopes
