@@ -5,3 +5,4 @@
 *.elf
 .vscode
 bin
+build

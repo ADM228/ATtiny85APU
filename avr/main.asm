@@ -824,6 +824,41 @@ PILOX_RegHndl:
 	rjmp AfterSPI
 
 .set REG_OFF	= PITCH_HI_AB_D
+PHIAB_RegHndl:
+	sbrs r1,	3		;
+	rjmp L009			;	Reset PhaseAcc A if told so
+		clr PhaseAccA_L	;
+		clr	PhaseAccA_H	;__
+	L009:				;
+	sbrs r1,	7		;
+	rjmp PHIXY_RegHndl	;	Reset PhaseAcc B if told so
+		clr PhaseAccB_L	;
+		clr	PhaseAccB_H	;__
+	rjmp PHIXY_RegHndl
+
+PHICD_RegHndl:
+	sbrs r1,	3		;
+	rjmp L00A			;	Reset PhaseAcc C if told so
+		clr PhaseAccC_L	;
+		clr	PhaseAccC_H	;__
+	L00A:				;
+	sbrs r1,	7		;
+	rjmp PHIXY_RegHndl	;	Reset PhaseAcc D if told so
+		clr PhaseAccD_L	;
+		clr	PhaseAccD_H	;__
+	rjmp PHIXY_RegHndl
+
+PHIEN_RegHndl:
+	sbrs r1,	3		;
+	rjmp L024			;	Reset PhaseAcc E if told so
+		clr PhaseAccE_L	;
+		clr	PhaseAccE_H	;__
+	L024:				;
+	sbrs r1,	7		;
+	rjmp PHIXY_RegHndl	;	Reset PhaseAcc N if told so
+		clr PhaseAccN_L	;
+		clr	PhaseAccN_H	;__
+
 PHIXY_RegHndl:
 	; Y has 0x06
 	lsl	YL
@@ -904,16 +939,6 @@ PHIXY_RegHndl:
 		std	Y+ShiftedIncrementB_L-RAMOff-REG_OFF,	r0
 
 	L002:				;
-	sbrs r1,	3		;
-	rjmp L009			;	Reset PhaseAcc A if told so
-		clr PhaseAccA_L	;	TODO indexing in some way
-		clr	PhaseAccA_H	;__
-	L009:				;
-	sbrs r1,	7		;
-	rjmp L00A			;	Reset PhaseAcc B if told so
-		clr PhaseAccB_L	;	TODO indexing in some way
-		clr	PhaseAccB_H	;__
-	L00A:
 	rjmp AfterSPI
 
 
@@ -1044,9 +1069,9 @@ CallTable:
 	rjmp PILOX_RegHndl
 	rjmp PILOX_RegHndl
 	; 0x06..08		(Pitch Hi XY)
-	rjmp PHIXY_RegHndl
-	rjmp PHIXY_RegHndl
-	rjmp PHIXY_RegHndl
+	rjmp PHIAB_RegHndl
+	rjmp PHICD_RegHndl
+	rjmp PHIEN_RegHndl
 	; 0x09..0D		(Duty Cycle X)
 	rjmp DUTYX_RegHndl
 	rjmp DUTYX_RegHndl

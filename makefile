@@ -10,8 +10,8 @@ bin/avr/main.elf: bin/avr bin/avr/main.hex bin/avr/main.map
 	avr-objcopy -v -I ihex -O elf32-avr bin/avr/main.hex bin/avr/main.elf
 
 flash: bin/avr bin/avr/main.hex
-	# DEV := "/dev/ttyUSB0"
-	avrdude -v -p attiny85 -c stk500v1 -b19200 -P /dev/ttyUSB0 -U flash:w:bin/avr/main.hex:i -U lfuse:w:0xE2:m
+	# DEV := "/dev/ttyUSB1"
+	avrdude -v -p attiny85 -c stk500v1 -b19200 -P /dev/ttyUSB1 -U flash:w:bin/avr/main.hex:i -U lfuse:w:0xE2:m
 
 bin/emu:
 	mkdir -p bin/emu
