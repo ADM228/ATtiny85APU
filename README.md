@@ -29,7 +29,7 @@ This project is creating a soundchip out of an ATtiny85. Written entirely in ass
     - 8-bit phase accumulator increment value
     - 3-bit octave value (shifts the increment value for a total 15-bit range)
     - Dedicated phase reset bit (only resets the phase accumulator, not LFSR)
-  - Powered by a 16-bit Galois LFSR with adjustable taps
+  - Powered by a 16-bit [Galois LFSR](https://en.wikipedia.org/wiki/Linear-feedback_shift_register#Galois_LFSRs) with adjustable taps
   - The operation is XNOR, always can come back to life
   - On each channel, OR'd with the pulse wave
 
@@ -146,16 +146,34 @@ The emulator is located in the [emu/libt85apu](emu/libt85apu/) folder. It is wri
 - 2 resampling quality options available:
   - 0: No resampling
   - 1: Averaging of values on that sample
-- Emulates all of the output modes implemented in real hardware
-  - 2 options for PWM output on pin 3:
-    - Essentially an 8-bit DAC
-    - Actual cycle-accurate PWM emulation
-- Emulation of a (fixed-size, decided at compile time, defaults to 1) stack register that register writes can pile up onto and then automatically flushed when it's time to update
+- 2 options for emulating PWM output on pin 3:
+  - Essentially an 8-bit DAC
+  - Actual cycle-accurate PWM emulation
+- Emulation of a register write buffer that register writes can pile up onto and then automatically flushed when it's time to update
+  - Sizing can be defined at compile time or runtime via the `T85APU_SHIFT_REGISTER_SIZE` define
   - A function that tells you whether an update is pending in the shift register
-- An API similar to emu2149
+- Raw and padded sample output
 - A class-based C++ wrapper for your convenience
 - zlib licensed
 
-To use it, copy the [emu/libt85apu](emu/libt85apu/) folder into your project, and include the `t85apu.h` in C, or `t85apu.hpp` if you want to use the C++ wrapper.
+For more info check out the [t85apu.h](emu/libt85apu/t85apu.h) and [t85apu.hpp](emu/libt85apu/t85apu.hpp) files. The emulator also provides useful register defines in the [t85apu_regdefines.h](emu/libt85apu/t85apu_regdefines.h) file.
 
-TODO: CMake API description
+### Manual usage
+
+To use it manually, copy the [emu/libt85apu](emu/libt85apu/) folder into your project, and include the `t85apu.h` in C, or `t85apu.hpp` if you want to use the C++ wrapper. Then, compile the t85apu.c file as a library and link it to the final executable.
+
+### Usage with CMake
+
+The emulator also has a CMake API, which makes including it in your project much easier. To do that, you need to merely add this repository via FetchContent. Here's an example of what to add to your `CMakeLists.txt`:
+
+```
+include(FetchContent)
+FetchContent_Declare(t85apu
+	GIT_REPOSITORY https://github.com/ADM228/ATtiny85APU.git
+	GIT_TAG main)
+
+set(T85APU_REGWRITE_BUFFER_SIZE 1)
+FetchContent_MakeAvailable(t85apu)
+
+target_link_libraries(<your_executable_name> PRIVATE t85apu)
+```
