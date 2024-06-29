@@ -17,6 +17,10 @@ extern "C"
 {
 #endif
 
+/*
+	The T85APU_SHIFT_REGISTER_SIZE define sets the size of the register write buffer. If it is 0 or less (or undefined), then the register write buffer size is decided when initializing the t85APU.
+*/
+
 #if T85APU_SHIFT_REGISTER_SIZE < 1
 #undef T85APU_SHIFT_REGISTER_SIZE
 #endif
@@ -81,14 +85,12 @@ typedef struct __t85apu {
 } t85APU;
 
 /**
- * @brief Defines specifying the output type for the t85APU.
- * 
- * @todo (i should probably make this an enum lmao)
- *
- * @li @c T85APU_OUTPUT_PB4 emulates the PWM output from the @c OUT pin as an 8-bit DAC.
- * @li @c T85APU_OUTPUT_PB4_EXACT emulates the PWM output from the @c OUT pin as the exact PWM (at the rate of (t85APU's clock / 256)). Can take more CPU time.
+ *  @brief Output type for t85APU: emulates the PWM output from the @c OUT pin as an 8-bit DAC.
  */
 #define T85APU_OUTPUT_PB4 0
+/**
+ * @brief Output type for t85APU: emulates the PWM output from the @c OUT pin as the exact PWM (at the rate of (t85APU's clock / 256)). Can take more CPU time.
+ */
 #define T85APU_OUTPUT_PB4_EXACT 1
 
 #ifdef T85APU_SHIFT_REGISTER_SIZE

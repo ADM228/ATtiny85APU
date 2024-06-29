@@ -55,21 +55,21 @@ The registers themselves:
 |   0x0E    | NTPLO |             Noise LFSR inversion value (low byte)             |
 |   0x0F    | NTPHI |             Noise LFSR inversion value (high byte)            |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1n    | VOLX  |                    Channel X static volume                    |
+|   0x1n    | VOL_X |                    Channel X static volume                    |
 |(n = 0..4,X = A..E)|                                                               |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1n    | CFGX  |NoiseEn| EnvEn |Env/Smp| Slot# |  Right volume |  Left volume  |
+|   0x1n    | CFG_X |NoiseEn| EnvEn |Env/Smp| Slot# |  Right volume |  Left volume  |
 |(n = 5..9,X = A..E)|                                                               |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1A    | ELLO  |             Low byte of envelope phase load value             |
-|   0x1B    | ELHI  |            High byte of envelope phase load value             |
+|   0x1A    | ELDLO |             Low byte of envelope phase load value             |
+|   0x1B    | ELDHI |            High byte of envelope phase load value             |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1C    | ESHP  |EnvB PR|    Envelope B shape   |EnvA PR|    Envelope A shape   |
+|   0x1C    | E_SHP |EnvB PR|    Envelope B shape   |EnvA PR|    Envelope A shape   |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1D    | EPLA  |             Pitch increment value for envelope A              |
-|   0x1E    | EPLB  |             Pitch increment value for envelope B              |
+|   0x1D    | EPLOA |             Pitch increment value for envelope A              |
+|   0x1E    | EPLOB |             Pitch increment value for envelope B              |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1F    | EPH   |     Envelope B octave num     |     Envelope A octave num     |
+|   0x1F    | EPIHI |     Envelope B octave num     |     Envelope A octave num     |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
 |___________|_______|_______|_______|_______|_______|_______|_______|_______|_______|
 
@@ -82,8 +82,8 @@ Notes:
 - The default values for registers:
   - Most are 0
   - `NTPHI` is 0x24, sorta corresponding to the AY-3-8910
-  - `CFGX` is 0x0F, corresponding to maximum panning volume on both sides
-- Since the chip currently only outputs mono audio, only the left panning bits in `CFGX` are used. It is recommended to set the right panning bits to the same contents as the left panning bits for compatibility in the future.
+  - `CFG_X` is 0x0F, corresponding to maximum panning volume on both sides
+- Since the chip currently only outputs mono audio, only the left panning bits in `CFG_X` are used. It is recommended to set the right panning bits to the same contents as the left panning bits for compatibility in the future.
 
 ## Real hardware
 
