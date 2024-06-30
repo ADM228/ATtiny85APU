@@ -151,7 +151,7 @@ The emulator is located in the [emu/libt85apu](emu/libt85apu/) folder. It is wri
   - Essentially an 8-bit DAC
   - Actual cycle-accurate PWM emulation
 - Emulation of a register write buffer that register writes can pile up onto and then automatically flushed when it's time to update
-  - Sizing can be defined at compile time or runtime via the `T85APU_SHIFT_REGISTER_SIZE` define
+  - Sizing can be defined at compile time or runtime via the `T85APU_REGWRITE_BUFFER_SIZE` define
   - A function that tells you whether an update is pending in the shift register
 - Raw and padded sample output
 - A class-based C++ wrapper for your convenience

@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
-#define T85APU_SHIFT_REGISTER_SIZE 16
+#define T85APU_REGWRITE_BUFFER_SIZE 16
 
 #include "libt85apu/t85apu.c"
 
@@ -14,7 +14,7 @@ FILE * file;
 
 void writeShit() {
     for (int j = 0; j < 960; j++) {
-            sampleBuffer[j] = t85APU_calc(apu);
+            sampleBuffer[j] = t85APU_calcS16(apu);
             // t85APU_cycle(apu);
             // sampleBuffer[j] = apu->channelOutput[0] << 5; 
         }

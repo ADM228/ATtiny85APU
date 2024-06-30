@@ -18,11 +18,11 @@ extern "C"
 #endif
 
 /*
-	The T85APU_SHIFT_REGISTER_SIZE define sets the size of the register write buffer. If it is 0 or less (or undefined), then the register write buffer size is decided when initializing the t85APU.
+	The T85APU_REGWRITE_BUFFER_SIZE define sets the size of the register write buffer. If it is 0 or less (or undefined), then the register write buffer size is decided when initializing the t85APU.
 */
 
-#if T85APU_SHIFT_REGISTER_SIZE < 1
-#undef T85APU_SHIFT_REGISTER_SIZE
+#if T85APU_REGWRITE_BUFFER_SIZE < 1
+#undef T85APU_REGWRITE_BUFFER_SIZE
 #endif
 
 typedef struct __t85apu {
@@ -75,8 +75,8 @@ typedef struct __t85apu {
 	bool channelMute[5];
 
 	// Shift register emulation
-	#ifdef T85APU_SHIFT_REGISTER_SIZE
-	uint16_t shiftRegister[T85APU_SHIFT_REGISTER_SIZE];
+	#ifdef T85APU_REGWRITE_BUFFER_SIZE
+	uint16_t shiftRegister[T85APU_REGWRITE_BUFFER_SIZE];
 	#else
 	uint16_t * shiftRegister;
 	size_t shiftRegSize;
@@ -93,7 +93,7 @@ typedef struct __t85apu {
  */
 #define T85APU_OUTPUT_PB4_EXACT 1
 
-#ifdef T85APU_SHIFT_REGISTER_SIZE
+#ifdef T85APU_REGWRITE_BUFFER_SIZE
 /**
  * @brief Creates a new instance of t85APU
  * 

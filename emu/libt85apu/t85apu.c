@@ -49,7 +49,7 @@ static const double outputQualityThreshold[] = {
 	1.0,	// T85APU_OUTPUT_PB4_EXACT, PWM is a bitch and changes every cycle
 };
 
-#ifdef T85APU_SHIFT_REGISTER_SIZE
+#ifdef T85APU_REGWRITE_BUFFER_SIZE
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType) {
 #else
 t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t shiftRegisterSize) {
@@ -67,11 +67,9 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t 
 	 modf(log2(apu->ticksPerClockCycle), &tmp) == 0.0 && apu->ticksPerClockCycle <= outputQualityThreshold[apu->outputType]
 	 ? 0 : 1);
 	t85APU_reset(apu);
-	apu->shiftRegister[0] = 0;
 	apu->ticks = 0;
-	apu->shiftRegCurIdx = 0;
-	#ifdef T85APU_SHIFT_REGISTER_SIZE
-	memset(apu->shiftRegister, 0, sizeof(uint16_t)*T85APU_SHIFT_REGISTER_SIZE);
+	#ifdef T85APU_REGWRITE_BUFFER_SIZE
+	memset(apu->shiftRegister, 0, sizeof(uint16_t)*T85APU_REGWRITE_BUFFER_SIZE);
 	#else
 	apu->shiftRegister = calloc(shiftRegisterSize, sizeof(uint16_t));
 	if (!apu->shiftRegister){
@@ -81,6 +79,8 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t 
 		return NULL;
 	}
 	#endif
+	apu->shiftRegCurIdx = 0;
+	apu->shiftRegister[0] = 0;
 	memset(apu->channelMute,	false,	sizeof(bool)*5);
 	return apu;
 }
@@ -153,14 +153,14 @@ void t85APU_setOutputType (t85APU * apu, uint_fast8_t outputType) {
 uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 	if (!apu) return 0;
 	uint16_t out = apu->shiftRegister[0];
-	#if T85APU_SHIFT_REGISTER_SIZE > 1
-	uint16_t buffer[T85APU_SHIFT_REGISTER_SIZE-1];
-	memcpy (buffer, apu->shiftRegister+1, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
-	memcpy (apu->shiftRegister, buffer, sizeof(uint16_t) * (T85APU_SHIFT_REGISTER_SIZE - 1));
-	apu->shiftRegister[T85APU_SHIFT_REGISTER_SIZE-1] = newData;
-	#elif T85APU_SHIFT_REGISTER_SIZE == 1
+	#if T85APU_REGWRITE_BUFFER_SIZE > 1
+	uint16_t buffer[T85APU_REGWRITE_BUFFER_SIZE-1];
+	memcpy (buffer, apu->shiftRegister+1, sizeof(uint16_t) * (T85APU_REGWRITE_BUFFER_SIZE - 1));
+	memcpy (apu->shiftRegister, buffer, sizeof(uint16_t) * (T85APU_REGWRITE_BUFFER_SIZE - 1));
+	apu->shiftRegister[T85APU_REGWRITE_BUFFER_SIZE-1] = newData;
+	#elif T85APU_REGWRITE_BUFFER_SIZE == 1
 	apu->shiftRegister[0] = newData;
-	#elif !defined(T85APU_SHIFT_REGISTER_SIZE)
+	#elif !defined(T85APU_REGWRITE_BUFFER_SIZE)
 	for (size_t i = 0; i < apu->shiftRegSize-1; i++) {
 		apu->shiftRegister[i] = apu->shiftRegister[i+1];
 	}
@@ -173,8 +173,8 @@ uint16_t t85APU_shiftReg (t85APU * apu, uint16_t newData) {
 void t85APU_writeReg (t85APU * apu, uint8_t addr, uint8_t data) {
 	if (!apu) return;
 	uint16_t shiftRegData = (addr << 8) | data | 0x8000;
-#ifdef T85APU_SHIFT_REGISTER_SIZE
-	if (apu->shiftRegCurIdx < T85APU_SHIFT_REGISTER_SIZE)	// == STACK_REG
+#ifdef T85APU_REGWRITE_BUFFER_SIZE
+	if (apu->shiftRegCurIdx < T85APU_REGWRITE_BUFFER_SIZE)	// == STACK_REG
 #else
 	if (apu->shiftRegCurIdx < apu->shiftRegSize)
 #endif

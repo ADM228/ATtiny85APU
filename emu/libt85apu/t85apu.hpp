@@ -26,7 +26,7 @@ class t85APUHandle {
 		 * 
 		 */
 		t85APUHandle() { apu = nullptr; }
-		#ifdef T85APU_SHIFT_REGISTER_SIZE
+		#ifdef T85APU_REGWRITE_BUFFER_SIZE
 		/**
 		 * @brief Constructs a new t85APUHandle object
 		 * 
@@ -152,7 +152,7 @@ class t85APUHandle {
 			this->apu = (t85APU *)calloc(1, sizeof(t85APU));
 			if (!this->apu) {fprintf(stderr, "Could not allocate t85APU\n"); return;}
 			memcpy(apu, __apu, sizeof(t85APU));
-			#ifndef T85APU_SHIFT_REGISTER_SIZE
+			#ifndef T85APU_REGWRITE_BUFFER_SIZE
 			apu->shiftRegister = (uint16_t *)calloc(__apu->shiftRegSize, sizeof(uint16_t));
 			if (!apu->shiftRegister) {
 				fprintf(stderr, "Could not allocate t85apu shift register, deleting the t85APU\n");
