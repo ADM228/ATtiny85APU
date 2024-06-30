@@ -37,12 +37,12 @@ This project is creating a soundchip out of an ATtiny85. Written entirely in ass
 
 The registers themselves:
 
-```
+```plaintext
  ___________ _______ _______________________________________________________________
 |           | Bit → |   7   |   6   |   5   |   4   |   3   |   2   |   1   |   0   |
 |   Index   |  Name |=======|=======|=======|=======|=======|=======|=======|=======|
 |   0x0n    | PILOX |          Pitch increment value for tone on channel X          |
-|(n = 0..4,X = A..E)|                                                               |
+|(n = 0..4,X = A..E)|_______________________________________________________________|
 |   0x05    | PILON |           Pitch increment value for noise generator           |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
 |   0x06    | PHIAB |Ch.B PR|Channel B octave number|Ch.A PR|Channel A octave number|
@@ -58,8 +58,8 @@ The registers themselves:
 |   0x1n    | VOL_X |                    Channel X static volume                    |
 |(n = 0..4,X = A..E)|                                                               |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
-|   0x1n    | CFG_X |NoiseEn| EnvEn |Env/Smp| Slot# |  Right volume |  Left volume  |
-|(n = 5..9,X = A..E)|                                                               |
+|   0x1n    | CFG_X | Noise | Envel.| ===== |  Slot |  Right volume |  Left volume  |
+|(n = 5..9,X = A..E)| Enable| Enable| ===== | number|               |               |
 |===========|=======|=======|=======|=======|=======|=======|=======|=======|=======|
 |   0x1A    | ELDLO |             Low byte of envelope phase load value             |
 |   0x1B    | ELDHI |            High byte of envelope phase load value             |
@@ -83,7 +83,8 @@ Notes:
   - Most are 0
   - `NTPHI` is 0x24, sorta corresponding to the AY-3-8910
   - `CFG_X` is 0x0F, corresponding to maximum panning volume on both sides
-- Since the chip currently only outputs mono audio, only the left panning bits in `CFG_X` are used. It is recommended to set the right panning bits to the same contents as the left panning bits for compatibility in the future.
+- Since the chip currently only outputs mono audio, only the left panning bits in `CFG_X` are used. It is recommended to set the right panning bits to the same contents as the left panning bits for compatibility with future versions.
+- Bit 5 of `CFG_X` is reserved and must be left at 0 for compatibility with future versions.
 
 ## Real hardware
 
@@ -95,7 +96,7 @@ The firmware is located in the [avr](avr/) folder, and is entirely written in AV
 
 The pin connection diagram is:
 
-```
+```plaintext
                __ __
      /Reset -1|° U  |8- VCC
          CS -2|     |7- SPI CLK
@@ -166,11 +167,11 @@ To use it manually, copy the [emu/libt85apu](emu/libt85apu/) folder into your pr
 
 The emulator also has a CMake API, which makes including it in your project much easier. To do that, you need to merely add this repository via FetchContent. Here's an example of what to add to your `CMakeLists.txt`:
 
-```
+```cmake
 include(FetchContent)
 FetchContent_Declare(t85apu
-	GIT_REPOSITORY https://github.com/ADM228/ATtiny85APU.git
-	GIT_TAG main)
+  GIT_REPOSITORY https://github.com/ADM228/ATtiny85APU.git
+  GIT_TAG main)
 
 set(T85APU_REGWRITE_BUFFER_SIZE 1)
 FetchContent_MakeAvailable(t85apu)
