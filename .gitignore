@@ -4,5 +4,6 @@
 *.map
 *.elf
 .vscode
+.cache
 bin
 build

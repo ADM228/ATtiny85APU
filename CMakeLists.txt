@@ -10,3 +10,5 @@ target_compile_features(t85apu_emu PRIVATE c_std_99)
 target_compile_definitions(t85apu_emu PUBLIC T85APU_REGWRITE_BUFFER_SIZE=${T85APU_REGWRITE_BUFFER_SIZE})
 target_link_libraries(t85apu_emu PRIVATE m)
 
+add_executable(example_c EXCLUDE_FROM_ALL ${CMAKE_CURRENT_SOURCE_DIR}/emu/example.c)
+target_link_libraries(example_c PRIVATE t85apu_emu)
