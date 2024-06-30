@@ -78,6 +78,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t 
 		free(apu);
 		return NULL;
 	}
+	apu->shiftRegSize = shiftRegisterSize;
 	#endif
 	apu->shiftRegCurIdx = 0;
 	apu->shiftRegister[0] = 0;
