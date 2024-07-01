@@ -7,5 +7,7 @@ option(T85APU_REGWRITE_BUFFER_SIZE "The size of the register write buffer. Leave
 add_library(t85apu_emu ${CMAKE_CURRENT_SOURCE_DIR}/t85apu.c)
 target_include_directories(t85apu_emu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(t85apu_emu PRIVATE c_std_99)
-target_compile_definitions(t85apu_emu PUBLIC T85APU_REGWRITE_BUFFER_SIZE=${T85APU_REGWRITE_BUFFER_SIZE})
+if (T85APU_REGWRITE_BUFFER_SIZE)
+    target_compile_definitions(t85apu_emu PUBLIC T85APU_REGWRITE_BUFFER_SIZE=${T85APU_REGWRITE_BUFFER_SIZE})
+endif()
 target_link_libraries(t85apu_emu PRIVATE m)

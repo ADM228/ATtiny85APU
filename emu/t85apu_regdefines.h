@@ -95,4 +95,6 @@
 #define PanRight(x) ((x & 3) << 2)
 #define Pan(left, right) PanLeft(left)|PanRight(right)
 
+#define EnvNum(x) ((x & 1) << SLOT_NUM)
+
 #define bit(bit) (1<<(bit))

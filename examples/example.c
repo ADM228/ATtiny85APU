@@ -154,7 +154,56 @@ int main (int argc, char ** argv) {
 	// And of course, let it simmer:
 	writeFrames(15);
 
-	// TODO: envelope tutorial
+	// Now let's turn off the noise:
+	t85APU_writeReg(apu, CFG_A, Pan(3, 3));
+
+	// Make the pulse wave sound more normal:
+	t85APU_writeReg(apu, PHIAB, PitchHi_Sq_A(0x4));
+	t85APU_writeReg(apu, PILOA, 0x79);
+
+	//* And learn about volume control!
+	// There's 3 ways to set volume for a channel on the t85APU -
+	//* The static volume, the panning volume, and (if enabled) the envelopes A and B
+	// The static volume is the most straightforward - goes from 0 to 255:
+	for (int i = 0; i <= 255; i++){
+		t85APU_writeReg(apu, VOL_A, i);
+		writeFrames(1);
+	}
+
+	// Then, the panning volume goes from 0 to 3, per channel per ear (stereo).
+	// Currently the t85APU only outputs in mono, so only the left panning
+	// bits are used. It is highly recommended to set the right panning to
+	// the same value as the left panning for compatibility with future versions.
+	for (int i = 3; i >= 0; i--){
+		t85APU_writeReg(apu, CFG_A, Pan(i, i));
+		writeFrames(6);
+	}
+	// Internally, those 2 values are multiplied, so they can be used together.
+
+	// And finally, the envelopes. Yes, plural - there are 2 of them, and any one of
+	// them can be used on any channel(s).
+	//* Setting up the basic envelopes requires 4 register writes:
+	// The envelope pitch increment (works the same way as the tone/noise):
+	t85APU_writeReg(apu, EPLOA, 0x40);
+	// The octave (unlike tone/noise, it goes from 0 to 15,
+	// with values 8 through 15 corresponding to tone octaves 0 through 7)
+	t85APU_writeReg(apu, EPIHI, PitchHi_Env_A(0x04));
+	// Then the envelope shape (this is also where you do phase resets,
+	// instead of the octave register):
+	t85APU_writeReg(apu, E_SHP, bit(ENVA_HOLD)|bit(ENVA_RST));
+	// A phase reset is required to start an envelope after resetting the chip
+	// or finishing a non-repeating envelope.
+	// And finally, enable the envelope on the channel (and specify its index):
+	t85APU_writeReg(apu, CFG_A, bit(ENV_EN)|EnvNum(0)|Pan(3, 3));
+
+	// The period of an envelope can be calculated by the following formula:
+	// (1 << 23) / (increment << octave) / chipSampleRate,
+	// where 23 is the width of the envelope phase accumulator (to accomodate
+	// for the 16 octave range). Thus, the envelope that we just set up
+	// has a period of (1 << 23) / (64 << 4) / (8000000 / 512) = 0.524288 seconds.
+	writeFrames(32);
+
+	// TODO: envelope shape description
 
 	// Delete the APU at the end:
 	t85APU_delete(apu);
