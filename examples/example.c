@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "libt85apu/t85apu.h"
-#include "libt85apu/t85apu_regdefines.h"
+#include "t85apu.h"
+#include "t85apu_regdefines.h"
 
 #define clockSpeed 8000000
 #define sampleRate 44100
@@ -113,7 +113,7 @@ int main (int argc, char ** argv) {
 	// But, it is unknown whether it is low or high at the moment.
 	//* This is where phase resets come into play.
 	// It is performed by writing to bits 3 and/or 7 of the octave registers:
-	t85APU_writeReg(apu, PHIAB, 1<<PR_SQ_A);
+	t85APU_writeReg(apu, PHIAB, bit(PR_SQ_A));
 	
 	// Now, the pulse generator is guaranteed to be in a high state, with an exception:
 	//* Using 0% duty cycle is equivalent to disabling the tone entirely.
@@ -133,7 +133,7 @@ int main (int argc, char ** argv) {
 	t85APU_writeReg(apu, PHIEN, PitchHi_Noise(0x7));
 	// Then, we would disable the pulse for better experience, but we just did it
 	// After that, you enable the noise on a channel via the CFG_X register:
-	t85APU_writeReg(apu, CFG_A, (1<<NOISE_EN)|Pan(3, 3));
+	t85APU_writeReg(apu, CFG_A, bit(NOISE_EN)|Pan(3, 3));
 
 	// And we have pure noise!
 

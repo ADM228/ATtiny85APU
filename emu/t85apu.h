@@ -85,6 +85,12 @@ typedef struct __t85apu {
 } t85APU;
 
 /**
+ * @name T85APU_OUTPUT defines
+ * Output types for t85APU.
+ * @todo make this an enum lmao
+ */
+///@{
+/**
  *  @brief Output type for t85APU: emulates the PWM output from the @c OUT pin as an 8-bit DAC.
  */
 #define T85APU_OUTPUT_PB4 0
@@ -92,7 +98,13 @@ typedef struct __t85apu {
  * @brief Output type for t85APU: emulates the PWM output from the @c OUT pin as the exact PWM (at the rate of (t85APU's clock / 256)). Can take more CPU time.
  */
 #define T85APU_OUTPUT_PB4_EXACT 1
+///@}
 
+/**
+ * @name t85APU functions
+ * Functions interacting with the t85APU.
+ */
+///@{
 #ifdef T85APU_REGWRITE_BUFFER_SIZE
 /**
  * @brief Creates a new instance of t85APU
@@ -217,6 +229,8 @@ bool t85APU_shiftRegisterPending (t85APU * apu);
  * @param mute The mute setting. @c true means to mute the channel, @c false means to unmute it.
  */
 void t85APU_setMute(t85APU * apu, uint_fast8_t channel, bool mute);
+
+///@}
 
 #ifdef __cplusplus
 }

@@ -139,7 +139,7 @@ Due to all of the pins being busy, the ATtiny85APU cannot receive an external cl
   
 ## Emulation
 
-The emulator is located in the [emu/libt85apu](emu/libt85apu/) folder. It is written in C99. Features:
+The emulator is located in the [emu](emu/) folder. It is written in C99. Features:
 
 - Fully compatible with the features of the real hardware
 - Cycle-accurate emulation of the output delays from when it was calculated
@@ -157,15 +157,30 @@ The emulator is located in the [emu/libt85apu](emu/libt85apu/) folder. It is wri
 - A class-based C++ wrapper for your convenience
 - zlib licensed
 
-For more info check out the [t85apu.h](emu/libt85apu/t85apu.h) and [t85apu.hpp](emu/libt85apu/t85apu.hpp) files. The emulator also provides useful register defines in the [t85apu_regdefines.h](emu/libt85apu/t85apu_regdefines.h) file.
+For more info check out the [t85apu.h](emu/t85apu.h) and [t85apu.hpp](emu/t85apu.hpp) files. The emulator also provides useful register defines in the [t85apu_regdefines.h](emu/t85apu_regdefines.h) file.
 
 ### Manual usage
 
-To use it manually, copy the [emu/libt85apu](emu/libt85apu/) folder into your project, and include the `t85apu.h` in C, or `t85apu.hpp` if you want to use the C++ wrapper. Then, compile the t85apu.c file as a library and link it to the final executable.
+To use it manually, copy the [emu](emu/) folder into your project, and include the `t85apu.h` file in C, or `t85apu.hpp` if you want to use the C++ wrapper. Then, compile the t85apu.c file as a library and link it to the final executable.
 
 ### Usage with CMake
 
-The emulator also has a CMake API, which makes including it in your project much easier. To do that, you need to merely add this repository via FetchContent. Here's an example of what to add to your `CMakeLists.txt`:
+The emulator also has a CMake API, which makes including it in your project much easier.
+
+#### Manual inclusion
+
+You can just copy the [emu](emu/) folder into your project, and use `add_subdirectory()` to add it to your `CMakeLists.txt`:
+
+```cmake
+add_subdirectory(<your name of the emu folder>)
+target_link_libraries(<your_executable_name> PRIVATE t85apu_emu)
+```
+
+Then you can include the aforementioned header files in your code.
+
+#### Inclusion via `FetchContent`
+
+You can also just use `FetchContent` to include the emulator in your project. Here's an example of what to add to your `CMakeLists.txt`:
 
 ```cmake
 include(FetchContent)
@@ -176,5 +191,5 @@ FetchContent_Declare(t85apu
 set(T85APU_REGWRITE_BUFFER_SIZE 1)
 FetchContent_MakeAvailable(t85apu)
 
-target_link_libraries(<your_executable_name> PRIVATE t85apu)
+target_link_libraries(<your_executable_name> PRIVATE t85apu_emu)
 ```

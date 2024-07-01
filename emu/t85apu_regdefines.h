@@ -94,3 +94,5 @@
 #define PanLeft(x) (x & 3)
 #define PanRight(x) ((x & 3) << 2)
 #define Pan(left, right) PanLeft(left)|PanRight(right)
+
+#define bit(bit) (1<<(bit))
