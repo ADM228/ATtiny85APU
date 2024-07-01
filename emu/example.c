@@ -56,7 +56,7 @@ int main (int argc, char ** argv) {
 	//* Let this simmer for a half a sec.
 	writeFrames(30);
 
-	//* But, how do you even calculate those mysterious pitch parameters?
+	//* But, how do we even calculate those mysterious pitch parameters?
 	// Essentially, the octave shifts the pitch increment to create a
 	// 15-bit total period value (the omitted bit is the lowest).
 	// This period value then feeds a phase accumulator to produce the sound.
@@ -124,7 +124,36 @@ int main (int argc, char ** argv) {
 	// Let it simmer for a bit, as usual:
 	writeFrames(5);
 
-	// TODO: noise tutorial
+	// That was a demonstration of how the pulse works.
+	// But that's not the only waveform that the t85APU can do -
+	//* There is also a periodic noise generator.
+	// Setting it up consists of several steps:
+	// The first 2 are the same as in a pulse generator - the pitch:
+	t85APU_writeReg(apu, PILON, 0x83);
+	t85APU_writeReg(apu, PHIEN, PitchHi_Noise(0x7));
+	// Then, we would disable the pulse for better experience, but we just did it
+	// After that, you enable the noise on a channel via the CFG_X register:
+	t85APU_writeReg(apu, CFG_A, (1<<NOISE_EN)|Pan(3, 3));
+
+	// And we have pure noise!
+
+	// Let it simmer for half a sec, as usual:
+	writeFrames(15);
+
+	// Let's revisit the disabling of the pulse, more specifically its reasoning -
+	//* The noise is OR'd with the pulse wave.
+	// If we enable the pulse back, we might get some interesting effects -
+	// like e.g. an open hihat. For that, let's set the noise to a high frequency,
+	// and do the same with the pulse:
+	t85APU_writeReg(apu, PILON, 0xFF);
+	t85APU_writeReg(apu, PHIAB, PitchHi_Sq_A(0x6));
+	t85APU_writeReg(apu, PILOA, 0xF9);
+	// And enable the pulse back by un-zeroing the duty cycle:
+	t85APU_writeReg(apu, DUTYA, 0x70);
+
+	// And of course, let it simmer:
+	writeFrames(15);
+
 	// TODO: envelope tutorial
 
 	// Delete the APU at the end:
