@@ -1,3 +1,9 @@
+/*
+	t85APU usage example (C edition)
+	© alexmush, 2024
+	Please scroll down to int main() to start reading the tutorial.
+*/
+
 #include <stdint.h>
 #include <stdio.h>
 #include <math.h>
@@ -23,12 +29,18 @@ void writeFrames(unsigned int frames) {
 	for (unsigned int frame = 0; frame < frames; frame++) {
 		for (int j = 0; j < samplesPerFrame; j++) {
 			sampleBuffer[j] = t85APU_calcS16(apu);
+			// Yields 15-bit values, perfect for signed short buffers
 		}
 		fwrite(sampleBuffer, sizeof(sampleBuffer), 1, file);
 	}
 }
 
 int main (int argc, char ** argv) {
+	//* Welcome to the t85APU usage tutorial.
+	// This tutorial shows some examples on how to use the ATtiny85APU soundchip,
+	// as well as some of the emulator API. I hope you find this understandable!
+	// Let's begin!
+
 	// Open the file:
 	if (argc < 2) {
 		fprintf(stderr, "Usage: example_c <output file>\n");
@@ -53,8 +65,8 @@ int main (int argc, char ** argv) {
 	// And the channel volume.
 	t85APU_writeReg(apu, VOL_A, 0xFF);	// 0xFF / 0xFF = 100% volume
 	
-	//* Let this simmer for a half a sec.
-	writeFrames(30);
+	//* Let this simmer for a bit.
+	writeFrames(20);
 
 	//* But, how do we even calculate those mysterious pitch parameters?
 	// Essentially, the octave shifts the pitch increment to create a
@@ -66,6 +78,7 @@ int main (int argc, char ** argv) {
 	// from other measurements. If we are converting, we will need to know
 	// the sample rate of the chip, which is the chip's clock divided by 512.
 	double chipSampleRate = clockSpeed / 512.0;
+	//* Note: the t85APU struct does not store the clock speed internally.
 
 	// And here's the formula for converting from Hz into APU period:
 	double frequency = 440.0;	// In Hertz
@@ -103,8 +116,8 @@ int main (int argc, char ** argv) {
 	t85APU_writeReg(apu, PILOA, increment);
 	t85APU_writeReg(apu, PHIAB, PitchHi_Sq_A(octave));
 
-	// And let it simmer for another half a sec:
-	writeFrames(30);
+	// And let it simmer for a bit:
+	writeFrames(20);
 
 	//* To completely stop the phase accumulator, write 0 as the pitch increment value:
 	t85APU_writeReg(apu, PILOA, 0);
@@ -203,9 +216,98 @@ int main (int argc, char ** argv) {
 	// has a period of (1 << 23) / (64 << 4) / (8000000 / 512) = 0.524288 seconds.
 	writeFrames(32);
 
-	// TODO: envelope shape description
+	//* There are a total of 8 envelope shapes, and they are bit-compatible with the AY-3-8910:
+	// Num	|  ATT	|  ALT	|  HOLD	| 	Shape	|
+	// 	0	|	0	|	0	|	0	|  \ \ \ \ 	|
+	// _____|_______|_______|_______|_  \ \ \ \	|
+	// 	1	|	0	|	0	|	1	|  \     	|
+	// _____|_______|_______|_______|_  \______	|
+	// 	2	|	0	|	1	|	0	|  \  /\  /	|
+	// _____|_______|_______|_______|_  \/  \/	|
+	// 	3	|	0	|	1	|	1	|  \ |¯¯¯¯¯	|
+	// _____|_______|_______|_______|_  \|		|
+	// 	4	|	1	|	0	|	0	|   / / / /	|
+	// _____|_______|_______|_______|_ / / / /	|
+	// 	5	|	1	|	0	|	1	|   /¯¯¯¯¯¯	|
+	// _____|_______|_______|_______|_ /		|
+	// 	6	|	1	|	1	|	0	|   /\  /\	|
+	// _____|_______|_______|_______|_ /  \/  \	|
+	// 	7	|	1	|	1	|	1	|   /|		|
+	// _____|_______|_______|_______|_ / |_____	|
+	// The phase reset bits (bit 3 for envelope A and 7 for envelope B) don't just simply
+	// reset the envelope phase to 0 -
+	//* they resets the envelopes' phase to the state of the envelope load registers.
+	// They are set to 0 on chip reset, so by default there is no need to initialize them.
+	// E.g. if you want to start the envelope at 25% of its way through a slope, you do this:
+	t85APU_writeReg(apu, ELDHI, 0x40);
+	//* Note that on looping envelopes it will loop right back to the maximum point.
+	// And then write the envelope shape:
+	t85APU_writeReg(apu, E_SHP, bit(ENVA_RST));
+	
+	//* You can also use the envelopes for melodic purposes with the higher 8 octaves.
+	// The pitch is calculated the same way it is for tone, just replace 
+	// the tone phase accumulator width of 15 bits with the envelope width of 23:
+	frequency = 261.625;	// In Hertz
+	period = frequency / chipSampleRate * (1<<23);
+	clamp(period, 0, (1<<23)-1);
+	octave = floor(log2(period) - 7); //! This still stays at 7 as it stems from the octave 0
+	clamp(octave, 0, 15);	// Update the limit here to 15
+	increment = round(period / pow(2, octave));
+	if (increment > UINT8_MAX && octave < 15) {	// And here as well
+		octave++;
+		increment /= 2.0;
+	}
+	clamp(increment, 0, UINT8_MAX);
+	// And write the pitch:
+	t85APU_writeReg(apu, EPLOA, increment);
+	t85APU_writeReg(apu, EPIHI, PitchHi_Env_A(octave));
+
+	// Let it simmer for a bit:
+	writeFrames(10);
+
+	//* Another feature of envelopes is being able to halve their volume on a channel.
+	// This is done with the channel's static register's most significant bit -
+	// Values ≥ 0x80 will keep the envelope at full volume,
+	// Values ≤ 0x7F will halve it:
+	t85APU_writeReg(apu, VOL_A, 0x7F);
+	// This, combined with the panning bits,
+	// gives the envelopes a total of 6 effective volume levels on each channel.
+
+	// Let it simmer for a bit:
+	writeFrames(10);
+
+	// The repeating triangle envelopes (ALT being 1 and HOLD being 0) consist of
+	// 2 slopes instead of 1,
+	//* which effectively halves their frequency:
+	t85APU_writeReg(apu, E_SHP, bit(ENVA_ALT)); 
+
+	// Let it simmer for a bit:
+	writeFrames(10);
+
+	// Since the envelope acts effectively as the volume curve,
+	//* To disable tone but keep the envelope playing you need to set the duty cycle to not 0:
+	t85APU_writeReg(apu, PILOA, 0);		// Disable the tone
+	t85APU_writeReg(apu, PHIAB, bit(PR_SQ_A));	// Phase reset needed
+	t85APU_writeReg(apu, DUTYA, 0x40);	// Any non-0 value will do
+
+	// Let it simmer for a bit:
+	writeFrames(10);
+
+	//* On the contrary, to enable the envelope with noise (but not tone), set the duty cycle to 0:
+	t85APU_writeReg(apu, DUTYA, 0);
+	// And enable both the envelope and noise obviously:
+	t85APU_writeReg(apu, CFG_A, bit(NOISE_EN)|bit(ENV_EN)|EnvNum(0)|Pan(3, 3));
+
+	// Let it simmer for a bit:
+	writeFrames(10);
+
+	// TODO: Noise tap values
 
 	// Delete the APU at the end:
 	t85APU_delete(apu);
+
+	//* Thank you for reading this tutorial on t85APU usage.
+	// Please contact me (links are in my GitHub profile) for any help using this chip in
+	// your project. Good luck!
 	return 0;
 }
