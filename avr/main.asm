@@ -83,10 +83,14 @@
 
 ; Internal configuration - DO NOT TOUCH
 .if !defined(STEREO) || !defined(MONO)
-	.if defined(OUTPUT_PB4) || defined(OUTPUT_DACX311) || defined(OUTPUT_MCP48X1)
+	.if defined(OUTPUT_PB4)
 		.define CHANNELS 1
-	.elseif defined (OUTPUT_DAC7612) || defined(OUTPUT_MCP48X2)
+	.elseif defined(OUTPUT_DACX311) || defined(OUTPUT_MCP48X1)
+		.define CHANNELS 1
+		.error "External DACs currently not supported"
+	.elseif defined(OUTPUT_DAC7612) || defined(OUTPUT_MCP48X2)
 		.define CHANNELS 2
+		.error "External DACs currently not supported"
 	.endif
 .elseif defined(OUTPUT_PB4) && defined(STEREO)
 	.error "PB4 cannot be stereo (it's a single pin, you can't output multiple channels on one analog pin)"
@@ -94,6 +98,7 @@
 	.error "Please select one of stereo or mono output"
 .elseif defined(STEREO)
 	.define CHANNELS 2
+	.error "Stereo currently not supported"
 .elseif defined(MONO)
 	.define CHANNELS 1
 .endif
@@ -103,6 +108,7 @@
 .elseif defined(OUTPUT_DACX311) || defined(OUTPUT_MCP48X1)
 	; The DACs ignore the extra bits, and there's no perf gain
 	.define BITDEPTH 12
+	.error "Currently unsupported DAC type"
 .else	
 	.error "Unsupported DAC type"
 .endif
@@ -955,6 +961,7 @@ ESHP_RegHndl:
 	lds	r16,	EnvShape
 	lds	r2,		EnvLdBuffer+0
 	lds	r3,		EnvLdBuffer+1
+	clr	r0
 
 	eor r16,	r1
 	andi r16,	1<<ENV_A_ATT|1<<ENV_B_ATT
