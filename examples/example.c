@@ -150,7 +150,7 @@ int main (int argc, char ** argv) {
 
 	// And we have pure noise!
 
-	// Let it simmer for half a sec, as usual:
+	// Let it simmer for some time, as usual:
 	writeFrames(15);
 
 	// Let's revisit the disabling of the pulse, more specifically its reasoning -
@@ -301,8 +301,26 @@ int main (int argc, char ** argv) {
 	// Let it simmer for a bit:
 	writeFrames(10);
 
-	// TODO: Noise tap values
+	// Let's disable the envelope for a future comparison:
+	t85APU_writeReg(apu, CFG_A, bit(NOISE_EN)|Pan(3, 3));
 
+	// And let it simmer for a bit:
+	writeFrames(20);
+
+	//* One of the more advanced things to do on this chip is setting the noise tap values.
+	// The default noise tap value is 0x2400, which makes it somewhat sound
+	// like a white noise generator. Different sounding pseudorandom 1-bit noise
+	// can be achieved by changing the value.
+	// To change the value just write to one of the two NTPXX registers, and it
+	// will be updated immediately.
+	//* Note that the LFSR contents are not reset by this.
+	t85APU_writeReg(apu, NTPLO, 0x3B);	// Now the value is 0x243B
+	// Now the noise sounds somewhat different.
+
+	// And let it simmer for a bit:
+	writeFrames(30);
+
+	// That's pretty much it for the chip capabilities in the ATtiny85APU v1.0.
 	// Delete the APU at the end:
 	t85APU_delete(apu);
 
