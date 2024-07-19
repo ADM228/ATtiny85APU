@@ -313,7 +313,8 @@ int main (int argc, char ** argv) {
 	// can be achieved by changing the value.
 	// To change the value just write to one of the two NTPXX registers, and it
 	// will be updated immediately.
-	//* Note that the LFSR contents are not reset by this.
+	//* Note that the LFSR contents are not reset by this,
+	// nor are they reset by the phase reset bit.
 	t85APU_writeReg(apu, NTPLO, 0x3B);	// Now the value is 0x243B
 	// Now the noise sounds somewhat different.
 

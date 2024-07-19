@@ -1,5 +1,6 @@
-- CMake API description in README
 
+- Noise LFSR reset on phase reset
+- Move low bytes of PAs to RAM
 - Sample playback
 - External DAC connectivity
 

@@ -154,6 +154,7 @@ int main (int argc, char ** argv) {
 
 	// Let it simmer for some time, as usual:
 	writeFrames(15);
+	
 	// Let's revisit the disabling of the pulse, more specifically its reasoning -
 	//* The noise is OR'd with the pulse wave.
 	// If we enable the pulse back, we might get some interesting effects -
@@ -314,7 +315,8 @@ int main (int argc, char ** argv) {
 	// can be achieved by changing the value.
 	// To change the value just write to one of the two NTPXX registers, and it
 	// will be updated immediately.
-	//* Note that the LFSR contents are not reset by this.
+	//* Note that the LFSR contents are not reset by this,
+	// nor are they reset by the phase reset bit.
 	apu.writeReg(NTPLO, 0x3B);	// Now the value is 0x243B
 	// Now the noise sounds somewhat different.
 
