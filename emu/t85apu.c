@@ -74,8 +74,7 @@ t85APU * t85APU_new (double clock, double rate, uint_fast8_t outputType, size_t 
 	apu->shiftRegister = calloc(shiftRegisterSize, sizeof(uint16_t));
 	if (!apu->shiftRegister){
 		fprintf(stderr, "Could not allocate t85apu shift register, deleting the t85APU\n");
-		if (apu->resamplingBuffer) free(apu->resamplingBuffer);
-		free(apu);
+		t85APU_delete(apu);
 		return NULL;
 	}
 	apu->shiftRegSize = shiftRegisterSize;
@@ -118,6 +117,12 @@ void t85APU_reset (t85APU * apu) {
 
 void t85APU_delete (t85APU * apu) {
 	if (!apu) return;
+
+	if (apu->resamplingBuffer) free(apu->resamplingBuffer);
+	
+	#ifndef T85APU_REGWRITE_BUFFER_SIZE
+	if (apu->shiftRegister) free(apu->shiftRegister);
+	#endif
 
 	free(apu);
 }

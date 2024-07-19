@@ -169,13 +169,41 @@ class t85APUHandle {
 		 * 
 		 * @param __apu The t85APU struct to swap the data with.
 		 */
-		inline void operator= (t85APU * & __apu) { auto tmp = this->apu; this->apu = __apu; __apu = tmp; } //move constructor
+		inline void operator= (t85APU * & __apu) { auto tmp = this->apu; this->apu = __apu; __apu = tmp; }
 		/**
 		 * @brief Move constructor.
 		 * 
 		 * @param __apu The t85APU struct to swap the data with.
 		 */
-		inline void operator= (t85APU && __apu) { auto tmp = this->apu; this->apu = &__apu; __apu = *tmp; } //move constructor
+		inline void operator= (t85APU && __apu) { auto tmp = this->apu; this->apu = &__apu; __apu = *tmp; }
+
+		/**
+		 * @brief Copy constructor.
+		 * 
+		 * @param __apu The t85APUHandle to copy the data of.
+		 */
+		inline void operator= (t85APUHandle & __apu) {
+			this->apu = (t85APU *)calloc(1, sizeof(t85APU));
+			if (!this->apu) {fprintf(stderr, "Could not allocate t85APU\n"); return;}
+			memcpy(apu, __apu.apu, sizeof(t85APU));
+			#ifndef T85APU_REGWRITE_BUFFER_SIZE
+			apu->shiftRegister = (uint16_t *)calloc(__apu.apu->shiftRegSize, sizeof(uint16_t));
+			if (!apu->shiftRegister) {
+				fprintf(stderr, "Could not allocate t85apu shift register, deleting the t85APU\n");
+				if (apu->resamplingBuffer) free(apu->resamplingBuffer);
+				free(apu);
+				apu = nullptr;
+				return;
+			}
+			memcpy(apu->shiftRegister, __apu.apu->shiftRegister, apu->shiftRegSize);
+			#endif
+		}
+		/**
+		 * @brief Move constructor.
+		 * 
+		 * @param __apu The t85APUHandle to swap the data with.
+		 */
+		inline void operator= (t85APUHandle && __apu) { auto tmp = this->apu; this->apu = __apu.apu; __apu = tmp; }
 	private:
 		/**
 		 * @brief The t85APU struct powering all of this.
