@@ -1,0 +1,23 @@
+name: ATtiny85APU assembly
+
+on: [push]
+
+jobs:
+  build_rom:
+    runs-on: ubuntu-latest
+    name: Assemble the firmware
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache avra
+        uses: ./.github/actions/cache_avra
+      - name: Set path
+        run: |
+          echo "${{ github.workspace }}/opt/avra/bin" >> $GITHUB_PATH
+      - name: Build the firmware
+        run: make
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: main.hex
+          path: bin/avr/main.hex

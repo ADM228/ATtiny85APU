@@ -1,0 +1,34 @@
+name: Cache avra
+description: Caches avra and builds it from source if missing
+inputs:
+  avraRef:
+    description: "avra Git Ref (used to checkout a fixed version)"
+    required: false
+    default: "master"
+  avraPath:
+    description: "avra path to cache"
+    required: false
+    default: ${{ github.workspace }}/opt/avra
+runs:
+  using: "composite"
+  steps:
+      # Cache avra
+      - uses: actions/cache@v4
+        id: cache_avra
+        with:
+          path: ${{ inputs.avraPath }}
+          key: ${{ runner.os }}-avra-${{ inputs.avraRef }}-${{ hashFiles('.github/actions/cache_avra/*') }}
+      # Checkout avra
+      - uses: actions/checkout@v4
+        if: steps.cache_avra.outputs.cache-hit != 'true'
+        with:
+          repository: Ro5bert/avra
+          ref: ${{ inputs.avraRef }}
+          path: './avra'
+      # Build avra
+      - if: steps.cache_avra.outputs.cache-hit != 'true'
+        run: |
+          cd avra
+          PREFIX=${{ inputs.avraPath }} make
+          PREFIX=${{ inputs.avraPath }} make install
+        shell: bash
