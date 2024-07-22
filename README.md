@@ -1,6 +1,6 @@
 # ATtiny85APU
 
-This project is creating a soundchip out of an ATtiny85. Written entirely in assembly, it is small enough to fit even onto an ATtiny25 (and the '45 too, obviously).
+This project is creating a soundchip out of an ATtiny85. Written entirely in assembly, it is small enough to fit even onto an ATtiny25/45.
 
 ## Capabilities
 

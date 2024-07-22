@@ -78,13 +78,31 @@
 
 .define OUTPUT_PB4
 ; .define SPI_DEBUG
-
-.include "tn85def.inc"
+; .define ATTINY 85
 
 ; Internal configuration - DO NOT TOUCH
+
+.if defined(ATTINY) 
+	.if ATTINY == 25
+		.message "[ATtiny85APU] Assembling for the ATtiny25"
+		.include "tn25def.inc"
+	.elseif ATTINY == 45
+		.message "[ATtiny85APU] Assembling for the ATtiny45"
+		.include "tn45def.inc"
+	.elseif ATTINY == 85
+		.message "[ATtiny85APU] Assembling for the ATtiny85"
+		.include "tn85def.inc"
+	.endif
+.else
+	.message "[ATtiny85APU] Assembling for the ATtiny85"
+	.include "tn85def.inc"
+.endif
+
+
 .if !defined(STEREO) || !defined(MONO)
 	.if defined(OUTPUT_PB4)
 		.define CHANNELS 1
+		.message "[ATtiny85APU] Assembling with mono sound output"
 	.elseif defined(OUTPUT_DACX311) || defined(OUTPUT_MCP48X1)
 		.define CHANNELS 1
 		.error "External DACs currently not supported"
@@ -101,6 +119,7 @@
 	.error "Stereo currently not supported"
 .elseif defined(MONO)
 	.define CHANNELS 1
+	.message "[ATtiny85APU] Assembling with mono sound output"
 .endif
 
 .if defined(OUTPUT_PB4)
