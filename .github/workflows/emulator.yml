@@ -28,3 +28,32 @@ jobs:
       - name: Build
         shell: bash
         run: cmake --build build --target t85apu_emu --config Release
+  
+  examples:
+    runs-on: ${{ matrix.platform.os }}
+    name: Build example for ${{ matrix.example.name }} on ${{ matrix.platform.name }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { name: Windows VS2019, os: windows-2019  }
+          - { name: Windows VS2022, os: windows-2022  }
+          - { name: Linux GCC,      os: ubuntu-latest }
+          - { name: Linux Clang,    os: ubuntu-latest, flags: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ }
+          - { name: MacOS XCode,    os: macos-latest  }
+        example:
+          - { name: C,    target: example_c   }
+          - { name: C++,  target: example_cpp }
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_INSTALL_PREFIX=install ${{matrix.platform.flags}} -DBUILD_SHARED_LIBS=FALSE
+  
+      - name: Build
+        shell: bash
+        run: cmake --build build --target ${{ matrix.example.target }} --config Release
