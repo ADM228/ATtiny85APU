@@ -3,9 +3,9 @@ name: ATtiny85APU assembly
 on: [push]
 
 jobs:
-  build_rom:
+  build_t85:
     runs-on: ubuntu-latest
-    name: Assemble the firmware
+    name: Assemble for the ATtiny85
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,5 +19,41 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: main.hex
+          name: attiny85apu_t85.hex
+          path: bin/avr/main.hex
+  build_t45:
+    runs-on: ubuntu-latest
+    name: Assemble for the ATtiny45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache avra
+        uses: ./.github/actions/cache_avra
+      - name: Set path
+        run: |
+          echo "${{ github.workspace }}/opt/avra/bin" >> $GITHUB_PATH
+      - name: Build the firmware
+        run: make ATTINY=45
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: attiny85apu_t45.hex
+          path: bin/avr/main.hex
+  build_t25:
+    runs-on: ubuntu-latest
+    name: Assemble for the ATtiny25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cache avra
+        uses: ./.github/actions/cache_avra
+      - name: Set path
+        run: |
+          echo "${{ github.workspace }}/opt/avra/bin" >> $GITHUB_PATH
+      - name: Build the firmware
+        run: make ATTINY=25
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: attiny85apu_t25.hex
           path: bin/avr/main.hex
