@@ -1,6 +1,6 @@
 name: ATtiny85APU assembly
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
