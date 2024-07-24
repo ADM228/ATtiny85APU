@@ -1,0 +1,33 @@
+name: ATtiny85APU examples
+
+on: [push, pull_request]
+
+jobs:
+  examples:
+    runs-on: ${{ matrix.platform.os }}
+    name: Build example for ${{ matrix.example.name }} on ${{ matrix.platform.name }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { path: build/examples, name: Windows VS2019, os: windows-2019  }
+          - { path: build/examples, name: Windows VS2022, os: windows-2022  }
+          - { path: build,          name: Linux GCC,      os: ubuntu-latest }
+          - { path: build,          name: Linux Clang,    os: ubuntu-latest, flags: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ }
+          - { path: build,          name: MacOS XCode,    os: macos-latest  }
+        example:
+          - { name: C,    target: example_c   }
+          - { name: C++,  target: example_cpp }
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_INSTALL_PREFIX=install ${{matrix.platform.flags}} -DBUILD_SHARED_LIBS=FALSE
+  
+      - name: Build
+        shell: bash
+        run: cmake --build ${{ matrix.platform.path }} --target ${{ matrix.example.target }} --config Release

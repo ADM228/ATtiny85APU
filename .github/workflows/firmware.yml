@@ -1,11 +1,19 @@
 name: ATtiny85APU assembly
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
-  build_t85:
+  build:
     runs-on: ubuntu-latest
-    name: Assemble for the ATtiny85
+    name: Assemble for the ATtiny${{ matrix.platform.attiny }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - {attiny: 25}
+          - {attiny: 45}
+          - {attiny: 85}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,45 +23,10 @@ jobs:
         run: |
           echo "${{ github.workspace }}/opt/avra/bin" >> $GITHUB_PATH
       - name: Build the firmware
-        run: make
+        run: make ATTINY=${{ matrix.platform.attiny }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: attiny85apu_t85.hex
+          name: attiny85apu_t${{ matrix.platform.attiny }}.hex
           path: bin/avr/main.hex
-  build_t45:
-    runs-on: ubuntu-latest
-    name: Assemble for the ATtiny45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Cache avra
-        uses: ./.github/actions/cache_avra
-      - name: Set path
-        run: |
-          echo "${{ github.workspace }}/opt/avra/bin" >> $GITHUB_PATH
-      - name: Build the firmware
-        run: make ATTINY=45
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: attiny85apu_t45.hex
-          path: bin/avr/main.hex
-  build_t25:
-    runs-on: ubuntu-latest
-    name: Assemble for the ATtiny25
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Cache avra
-        uses: ./.github/actions/cache_avra
-      - name: Set path
-        run: |
-          echo "${{ github.workspace }}/opt/avra/bin" >> $GITHUB_PATH
-      - name: Build the firmware
-        run: make ATTINY=25
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: attiny85apu_t25.hex
-          path: bin/avr/main.hex
+ 
