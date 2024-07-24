@@ -8,7 +8,6 @@ Written by alexmush
 #include "t85apu.h"
 #include <stdio.h>
 #include <math.h>
-#include <tgmath.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
