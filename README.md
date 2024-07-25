@@ -90,6 +90,8 @@ Notes:
 
 ### Firmware
 
+[![ATtiny85APU assembly](https://github.com/ADM228/ATtiny85APU/actions/workflows/firmware.yml/badge.svg)](https://github.com/ADM228/ATtiny85APU/actions/workflows/firmware.yml)
+
 The firmware is located in the [avr](avr/) folder, and is entirely written in AVR assembly. Its size is currently under 2 Kibibytes, therefore it can fit onto an ATtiny25 and '45 in addition to the '85. It is assembled with the [avra](github.com/Ro5bert/avra) assembler by running the command `make firmware` or `make avr`, which puts the resulting `main.hex` file into the `bin/avr` folder.
 
 ### Connections
@@ -139,6 +141,8 @@ Due to all of the pins being busy, the ATtiny85APU cannot receive an external cl
   
 ## Emulation
 
+[![ATtiny85APU emulator](https://github.com/ADM228/ATtiny85APU/actions/workflows/emulator.yml/badge.svg)](https://github.com/ADM228/ATtiny85APU/actions/workflows/emulator.yml)
+
 The emulator is located in the [emu](emu/) folder. It is written in C99. Features:
 
 - Fully compatible with the features of the real hardware
@@ -154,7 +158,7 @@ The emulator is located in the [emu](emu/) folder. It is written in C99. Feature
   - Sizing can be defined at compile time or runtime via the `T85APU_REGWRITE_BUFFER_SIZE` define
   - A function that tells you whether an update is pending in the shift register
 - Raw and padded sample output
-- A class-based C++ wrapper for your convenience
+- An OOP-based C++ wrapper for your convenience
 - zlib licensed
 
 For more info check out the [t85apu.h](emu/t85apu.h) and [t85apu.hpp](emu/t85apu.hpp) files. The emulator also provides useful register defines in the [t85apu_regdefines.h](emu/t85apu_regdefines.h) file.
@@ -193,3 +197,21 @@ FetchContent_MakeAvailable(t85apu)
 
 target_link_libraries(<your_executable_name> PRIVATE t85apu_emu)
 ```
+
+### Examples
+
+[![ATtiny85APU examples](https://github.com/ADM228/ATtiny85APU/actions/workflows/examples.yml/badge.svg)](https://github.com/ADM228/ATtiny85APU/actions/workflows/examples.yml)
+
+There is an example program provided together with the emulator in [C](examples/example.c) and [C++](examples/example.cpp). It is located in the [examples](examples/) folder and illustrates how to use the soundchip and the emulator API:
+
+- Initialization
+- Pitch control
+- Pitch calculation
+- Duty cycle control
+- Using noise and envelopes
+- Volume control
+- Noise generator control
+- Getting emulator output
+- Deletion
+
+The examples are not built by default as they have the `EXCLUDE_FROM_ALL` flag enabled, so you don't have to worry about them bloating your software. To build them, you have to explicitly select the `example_c` and/or `example_cpp` targets in CMake. The executables will appear in the `examples` subfolder of where the CMake Cache is.
